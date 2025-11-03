@@ -31,6 +31,14 @@ I built packnplay as a lightweight container/worktree launcher for my coding age
 
 ## Installation
 
+### Homebrew (macOS and Linux)
+
+```bash
+brew install obra/tap/packnplay
+```
+
+### From Source
+
 ```bash
 go build -o packnplay .
 sudo mv packnplay /usr/local/bin/
