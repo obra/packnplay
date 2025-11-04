@@ -5,6 +5,31 @@ All notable changes to packnplay will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.1.0] - 2025-11-03
+
+### Added
+
+#### Configuration UI Scrolling Support
+- Viewport scrolling for configuration interface in small terminal windows
+- Auto-scroll to keep focused elements visible during navigation
+- Manual scroll controls with PgUp/PgDown and Ctrl+U/Ctrl+D keyboard shortcuts
+- Visual scroll indicators ("↑ More content above ↑" / "↓ More content below ↓")
+- Fixed Save/Cancel button accessibility in scrollable content with proper spacing
+- Improved navigation bounds - stops at top/bottom instead of looping around
+- Header visibility guaranteed when navigating to top of configuration
+
+#### OrbStack Container Runtime Support
+- OrbStack detected automatically as container runtime option alongside Docker and Podman
+- Smart detection via OrbStack CLI (`orb`) and Docker context verification
+- Automatic Docker context switching to `orbstack` when selected as runtime
+- Full Docker CLI compatibility maintained for seamless operation
+- Updated test suite to include OrbStack as valid container runtime
+
+### Improved
+- Configuration interface accessibility for users with limited terminal space
+- Container runtime flexibility with additional macOS-optimized option
+- Navigation behavior consistency throughout configuration interface
+
 ## [v1.0.0] - 2024-10-25
 
 ### Added
