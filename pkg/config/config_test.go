@@ -134,8 +134,9 @@ func TestDetectAvailableRuntimes(t *testing.T) {
 
 	// All returned runtimes should be valid
 	validRuntimes := map[string]bool{
-		"docker": true,
-		"podman": true,
+		"docker":   true,
+		"podman":   true,
+		"orbstack": true,
 	}
 
 	for _, runtime := range runtimes {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 // Client handles Docker CLI interactions
@@ -39,6 +40,40 @@ func NewClientWithRuntime(preferredRuntime string, verbose bool) (*Client, error
 
 // UseSpecificRuntime uses a specific container runtime
 func (c *Client) UseSpecificRuntime(runtime string) (string, error) {
+	if runtime == "orbstack" {
+		// OrbStack uses Docker CLI but with orbstack context
+		if _, err := exec.LookPath("docker"); err != nil {
+			return "", fmt.Errorf("OrbStack requires docker CLI to be available")
+		}
+
+		// Verify OrbStack context is available
+		cmd := exec.Command("docker", "context", "ls", "--format", "{{.Name}}")
+		output, err := cmd.Output()
+		if err != nil {
+			return "", fmt.Errorf("failed to check Docker contexts for OrbStack: %w", err)
+		}
+
+		contexts := strings.Split(string(output), "\n")
+		orbstackFound := false
+		for _, ctx := range contexts {
+			if strings.TrimSpace(ctx) == "orbstack" {
+				orbstackFound = true
+				break
+			}
+		}
+
+		if !orbstackFound {
+			return "", fmt.Errorf("OrbStack context not found - is OrbStack running?")
+		}
+
+		// Set OrbStack as the active Docker context
+		if err := exec.Command("docker", "context", "use", "orbstack").Run(); err != nil {
+			return "", fmt.Errorf("failed to switch to OrbStack context: %w", err)
+		}
+
+		return "docker", nil
+	}
+
 	if _, err := exec.LookPath(runtime); err != nil {
 		return "", fmt.Errorf("container runtime '%s' not found in PATH", runtime)
 	}

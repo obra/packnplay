@@ -549,6 +549,7 @@ type SettingsModal struct {
 	quitting       bool
 	width          int
 	height         int
+	scrollOffset   int    // Current scroll position in lines
 }
 
 // SettingsSection represents a configuration section
@@ -939,12 +940,6 @@ func (m *SettingsModal) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down", "j":
 			if !m.buttonFocused {
 				m = m.navigateDown()
-				// Check if we've reached the end of all sections
-				if m.currentSection == 0 && m.currentField == 0 {
-					// We've wrapped around - move to buttons instead
-					m.buttonFocused = true
-					m.currentButton = 0
-				}
 			}
 
 		case "left", "h":
@@ -988,6 +983,29 @@ func (m *SettingsModal) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+		case "pgup", "ctrl+u":
+			// Manual scroll up
+			if m.height > 0 {
+				pageSize := m.height - 2 // Account for potential scroll indicators
+				if pageSize <= 0 {
+					pageSize = 1
+				}
+				m.scrollOffset -= pageSize
+				if m.scrollOffset < 0 {
+					m.scrollOffset = 0
+				}
+			}
+
+		case "pgdown", "ctrl+d":
+			// Manual scroll down
+			if m.height > 0 {
+				pageSize := m.height - 2 // Account for potential scroll indicators
+				if pageSize <= 0 {
+					pageSize = 1
+				}
+				m.scrollOffset += pageSize
+			}
+
 		case "s", "ctrl+s":
 			m.saved = true
 			return m, tea.Quit
@@ -1021,12 +1039,18 @@ func (m *SettingsModal) View() string {
 	return m.renderModal()
 }
 
-// navigateUp moves to previous field with section wrapping
+// navigateUp moves to previous field, stopping at the top
 func (m *SettingsModal) navigateUp() *SettingsModal {
 	m.currentField--
 	if m.currentField < 0 {
-		m.currentSection = (m.currentSection - 1 + len(m.sections)) % len(m.sections)
-		m.currentField = len(m.sections[m.currentSection].fields) - 1
+		// Move to previous section if available
+		if m.currentSection > 0 {
+			m.currentSection--
+			m.currentField = len(m.sections[m.currentSection].fields) - 1
+		} else {
+			// Already at the top - stay at first field of first section
+			m.currentField = 0
+		}
 	}
 	return m
 }
@@ -1085,9 +1109,9 @@ func (m *SettingsModal) activateCurrentField() *SettingsModal {
 	return m
 }
 
-// renderModal renders the complete settings modal with sections and button bar
+// renderModal renders the complete settings modal with sections and button bar with scrolling
 func (m *SettingsModal) renderModal() string {
-	var sections []string
+	var allLines []string
 
 	// Header
 	headerStyle := lipgloss.NewStyle().
@@ -1096,8 +1120,12 @@ func (m *SettingsModal) renderModal() string {
 		Align(lipgloss.Center).
 		Width(m.width)
 
-	sections = append(sections, headerStyle.Render("packnplay Configuration"))
-	sections = append(sections, "")
+	allLines = append(allLines, headerStyle.Render("packnplay Configuration"))
+	allLines = append(allLines, "")
+
+	// Track line numbers for current focused field for auto-scrolling
+	currentFocusLine := -1
+	currentLineIdx := len(allLines)
 
 	// Render each section
 	for sectionIdx, section := range m.sections {
@@ -1106,23 +1134,180 @@ func (m *SettingsModal) renderModal() string {
 			Foreground(lipgloss.Color("12")).
 			Render(section.title)
 
-		sections = append(sections, sectionHeader)
+		allLines = append(allLines, sectionHeader)
+		currentLineIdx++
 
 		// Render fields in section
 		for fieldIdx, field := range section.fields {
 			focused := sectionIdx == m.currentSection && fieldIdx == m.currentField
+			if focused && !m.buttonFocused {
+				currentFocusLine = currentLineIdx
+			}
+
 			fieldView := m.renderField(field, focused)
-			sections = append(sections, fieldView)
+			// Field view might contain multiple lines (with descriptions)
+			fieldLines := strings.Split(fieldView, "\n")
+			allLines = append(allLines, fieldLines...)
+			currentLineIdx += len(fieldLines)
 		}
 
-		sections = append(sections, "")
+		allLines = append(allLines, "")
+		currentLineIdx++
 	}
 
 	// Button bar at bottom (separate from content)
 	buttonBar := m.renderButtonBar()
-	sections = append(sections, buttonBar)
+	buttonLines := strings.Split(buttonBar, "\n")
 
-	return strings.Join(sections, "\n")
+	// Track button focus line - AFTER adding buttons to get correct position
+	buttonStartLine := currentLineIdx
+	allLines = append(allLines, buttonLines...)
+
+	if m.buttonFocused {
+		// Focus on the actual button line (separator + 1), not the separator
+		currentFocusLine = buttonStartLine + 1
+	}
+
+	// Add padding after buttons so they're not at the very bottom edge
+	allLines = append(allLines, "", "", "") // Add 3 empty lines after buttons
+
+	// Auto-scroll to keep focused element visible
+	if m.buttonFocused {
+		// When buttons are focused, force scroll to bottom to ensure they're visible
+		totalLines := len(allLines)
+		m.scrollOffset = totalLines - m.height + 2 // +2 to allow for scroll indicators
+		if m.scrollOffset < 0 {
+			m.scrollOffset = 0
+		}
+	} else {
+		// Special case: if at first field of first section, ensure header is visible
+		if m.currentSection == 0 && m.currentField == 0 {
+			m.scrollOffset = 0
+		} else {
+			m.ensureFocusVisible(currentFocusLine, len(allLines))
+		}
+	}
+
+	// Apply viewport scrolling
+	return m.applyViewport(allLines)
+}
+
+// ensureFocusVisible adjusts scroll offset to keep the focused element visible
+func (m *SettingsModal) ensureFocusVisible(focusLine int, totalLines int) {
+	if focusLine < 0 || m.height <= 0 {
+		return
+	}
+
+	// Calculate available content height (excluding scroll indicators)
+	needTopIndicator := m.scrollOffset > 0
+	needBottomIndicator := m.scrollOffset+m.height < totalLines
+
+	contentHeight := m.height
+	if needTopIndicator {
+		contentHeight--
+	}
+	if needBottomIndicator {
+		contentHeight--
+	}
+
+	// Ensure minimum content height
+	if contentHeight <= 0 {
+		contentHeight = m.height - 1
+	}
+
+	// Adjust scroll if focus is above viewport
+	if focusLine < m.scrollOffset {
+		m.scrollOffset = focusLine
+	}
+
+	// Adjust scroll if focus is below viewport
+	if focusLine >= m.scrollOffset+contentHeight {
+		m.scrollOffset = focusLine - contentHeight + 1
+	}
+
+	// Ensure scroll doesn't go negative
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
+
+	// Ensure scroll doesn't go past content
+	maxScroll := totalLines - contentHeight
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if m.scrollOffset > maxScroll {
+		m.scrollOffset = maxScroll
+	}
+}
+
+// applyViewport applies scrolling and renders visible portion with scroll indicators
+func (m *SettingsModal) applyViewport(allLines []string) string {
+	if m.height <= 0 || len(allLines) == 0 {
+		return strings.Join(allLines, "\n")
+	}
+
+	// If content fits entirely, show everything without indicators
+	if len(allLines) <= m.height {
+		return strings.Join(allLines, "\n")
+	}
+
+	// Reserve space for scroll indicators (max 2 lines)
+	availableHeight := m.height
+	needTopIndicator := m.scrollOffset > 0
+	needBottomIndicator := m.scrollOffset+m.height < len(allLines)
+
+	// Reduce available height for indicators
+	contentHeight := availableHeight
+	if needTopIndicator {
+		contentHeight--
+	}
+	if needBottomIndicator {
+		contentHeight--
+	}
+
+	// Ensure we have at least some space for content
+	if contentHeight <= 0 {
+		contentHeight = availableHeight - 1
+	}
+
+	// Calculate visible content window
+	start := m.scrollOffset
+	end := start + contentHeight
+	if end > len(allLines) {
+		end = len(allLines)
+	}
+
+	var result []string
+
+	// Top scroll indicator
+	if needTopIndicator {
+		indicator := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")).
+			Background(lipgloss.Color("235")).
+			Align(lipgloss.Center).
+			Width(m.width).
+			Render("↑ More content above ↑")
+		result = append(result, indicator)
+	}
+
+	// Visible content
+	if start < len(allLines) {
+		visibleLines := allLines[start:end]
+		result = append(result, visibleLines...)
+	}
+
+	// Bottom scroll indicator
+	if needBottomIndicator {
+		indicator := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")).
+			Background(lipgloss.Color("235")).
+			Align(lipgloss.Center).
+			Width(m.width).
+			Render("↓ More content below ↓")
+		result = append(result, indicator)
+	}
+
+	return strings.Join(result, "\n")
 }
 
 // renderField renders a settings field with consistent formatting
@@ -1401,7 +1586,38 @@ func detectAvailableRuntimes() []string {
 		}
 	}
 
+	// Check for OrbStack as an additional option
+	// OrbStack provides Docker-compatible CLI but can be explicitly selected
+	if isOrbStackAvailable() {
+		available = append(available, "orbstack")
+	}
+
 	return available
+}
+
+// isOrbStackAvailable checks if OrbStack is running and available
+func isOrbStackAvailable() bool {
+	// Check if orb CLI is available
+	if _, err := exec.LookPath("orb"); err != nil {
+		return false
+	}
+
+	// Verify OrbStack is actually running by checking Docker context
+	cmd := exec.Command("docker", "context", "ls", "--format", "{{.Name}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+
+	// Look for orbstack context
+	contexts := strings.Split(string(output), "\n")
+	for _, ctx := range contexts {
+		if strings.TrimSpace(ctx) == "orbstack" {
+			return true
+		}
+	}
+
+	return false
 }
 
 
