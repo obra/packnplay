@@ -25,10 +25,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full Docker CLI compatibility maintained for seamless operation
 - Updated test suite to include OrbStack as valid container runtime
 
+#### Visual Progress Bars for Container Operations
+- Real-time progress bars for `docker pull` and `docker build` operations
+- JSON progress parsing for precise download percentages and data transfer rates
+- Smart output stream handling (stdout for pulls, stderr for builds)
+- Throttled updates (100ms intervals) to prevent terminal flooding during rapid output
+- Success (✅) and error (❌) completion indicators with operation timing
+- Byte-formatted progress details showing download progress (e.g., "245MB/306MB")
+- Automatic terminal detection - only displays in interactive environments
+- Preserves verbose mode functionality with raw Docker output when `--verbose` used
+- Graceful fallback to current behavior if progress parsing fails
+
 ### Improved
 - Configuration interface accessibility for users with limited terminal space
 - Container runtime flexibility with additional macOS-optimized option
 - Navigation behavior consistency throughout configuration interface
+- User experience during container setup with clear feedback on download/build progress
 
 ## [v1.0.0] - 2024-10-25
 
