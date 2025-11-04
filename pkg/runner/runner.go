@@ -701,9 +701,10 @@ func ensureImage(dockerClient *docker.Client, config *devcontainer.Config, proje
 			dockerfilePath := filepath.Join(projectPath, ".devcontainer", config.DockerFile)
 			contextPath := filepath.Join(projectPath, ".devcontainer")
 
-			output, err := dockerClient.Run("build", "-f", dockerfilePath, "-t", imageName, contextPath)
+			// Use progress bar for build
+			err := dockerClient.RunWithProgress(imageName, "build", "-f", dockerfilePath, "-t", imageName, contextPath)
 			if err != nil {
-				return fmt.Errorf("failed to build image from %s: %w\nDocker output:\n%s", config.DockerFile, err, output)
+				return fmt.Errorf("failed to build image from %s: %w", config.DockerFile, err)
 			}
 		}
 	} else {
@@ -718,9 +719,10 @@ func ensureImage(dockerClient *docker.Client, config *devcontainer.Config, proje
 				fmt.Fprintf(os.Stderr, "Pulling image %s\n", imageName)
 			}
 
-			output, err := dockerClient.Run("pull", imageName)
+			// Use progress bar for pull
+			err := dockerClient.RunWithProgress(imageName, "pull", imageName)
 			if err != nil {
-				return fmt.Errorf("failed to pull image %s: %w\nDocker output:\n%s", imageName, err, output)
+				return fmt.Errorf("failed to pull image %s: %w", imageName, err)
 			}
 		} else {
 			// Image exists locally - check if user should be notified about newer versions

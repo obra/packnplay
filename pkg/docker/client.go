@@ -1,10 +1,14 @@
 package docker
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
+
+	"github.com/obra/packnplay/pkg/progress"
 )
 
 // Client handles Docker CLI interactions
@@ -122,6 +126,160 @@ func (c *Client) Run(args ...string) (string, error) {
 	}
 
 	return string(output), err
+}
+
+// RunWithProgress executes a docker command with real-time progress display
+func (c *Client) RunWithProgress(imageName string, args ...string) error {
+	// Add progress flag for operations that support it
+	if len(args) > 0 {
+		switch args[0] {
+		case "pull":
+			// Docker pull supports JSON progress
+			args = append(args, "--progress=json")
+		case "build":
+			// Docker build uses plain progress format, not JSON
+			args = append(args, "--progress=plain")
+		}
+	}
+
+	// Translate Docker commands to Apple Container CLI if needed
+	if c.cmd == "container" {
+		args = c.translateToAppleContainer(args)
+	}
+
+	cmd := exec.Command(c.cmd, args...)
+
+	if c.verbose {
+		fmt.Fprintf(os.Stderr, "+ %s %v\n", c.cmd, args)
+	}
+
+	// Docker commands output progress to different streams
+	var progressScanner *bufio.Scanner
+	var errorOutput chan string
+
+	if len(args) > 0 && args[0] == "build" {
+		// Build commands send progress to stderr
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			return fmt.Errorf("failed to create stderr pipe: %w", err)
+		}
+		progressScanner = bufio.NewScanner(stderr)
+
+		// For build, stdout might have final output
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return fmt.Errorf("failed to create stdout pipe: %w", err)
+		}
+		errorOutput = make(chan string, 1)
+		go func() {
+			scanner := bufio.NewScanner(stdout)
+			var lines []string
+			for scanner.Scan() {
+				lines = append(lines, scanner.Text())
+			}
+			errorOutput <- strings.Join(lines, "\n")
+		}()
+	} else {
+		// Pull commands send progress to stdout
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return fmt.Errorf("failed to create stdout pipe: %w", err)
+		}
+		progressScanner = bufio.NewScanner(stdout)
+
+		// Stderr for error messages
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			return fmt.Errorf("failed to create stderr pipe: %w", err)
+		}
+		errorOutput = make(chan string, 1)
+		go func() {
+			scanner := bufio.NewScanner(stderr)
+			var errorLines []string
+			for scanner.Scan() {
+				errorLines = append(errorLines, scanner.Text())
+			}
+			errorOutput <- strings.Join(errorLines, "\n")
+		}()
+	}
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start command: %w", err)
+	}
+
+	// Set up progress tracking
+	tracker := progress.NewProgressTracker(imageName)
+	progressBar := progress.NewProgressBar(os.Stderr, 80) // Assume 80 char width
+
+	var lastPercentage float64
+	var lastStatusText string
+	lastUpdateTime := time.Now()
+
+	// Read progress stream line by line
+	for progressScanner.Scan() {
+		line := progressScanner.Text()
+
+		if c.verbose {
+			// In verbose mode, just show raw output without progress bar
+			fmt.Fprintf(os.Stderr, "%s\n", line)
+			continue
+		}
+
+		// Parse progress from output
+		percentage, statusText, err := tracker.ParseLine(line)
+		if err != nil {
+			// Parse error - continue but don't update progress
+			continue
+		}
+
+		// Throttle progress bar updates to prevent flooding
+		now := time.Now()
+		timeSinceLastUpdate := now.Sub(lastUpdateTime)
+		percentChanged := percentage != lastPercentage
+		statusChanged := statusText != lastStatusText
+
+		// Update if significant change OR enough time passed OR completion
+		shouldUpdate := (percentChanged || statusChanged || tracker.IsComplete()) &&
+			(timeSinceLastUpdate > 100*time.Millisecond)
+
+		if progressBar.IsTerminal() && shouldUpdate {
+			progressBar.Update(percentage, statusText)
+			lastPercentage = percentage
+			lastStatusText = statusText
+			lastUpdateTime = now
+		}
+
+		// Break early if complete
+		if tracker.IsComplete() {
+			break
+		}
+	}
+
+	// Wait for command to finish
+	err := cmd.Wait()
+
+	// Get any error output
+	var stderrOutput string
+	select {
+	case stderrOutput = <-errorOutput:
+	default:
+	}
+
+	// Handle completion
+	if err != nil {
+		progressBar.Error(fmt.Errorf("%w\nDocker output:\n%s", err, stderrOutput))
+		return err
+	} else {
+		// Get final status for completion message
+		_, statusText, _ := tracker.ParseLine("")
+		if statusText == "" {
+			statusText = fmt.Sprintf("completed %s", imageName)
+		}
+		progressBar.Complete(statusText)
+	}
+
+	return nil
 }
 
 // translateToAppleContainer translates Docker CLI args to Apple Container CLI
