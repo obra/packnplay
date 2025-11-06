@@ -59,13 +59,13 @@ func (c *Config) GetDefaultImage() string {
 		return c.DefaultImage
 	}
 	// Ultimate fallback
-	return "ghcr.io/obra/packnplay-default:latest"
+	return "ghcr.io/obra/packnplay/devcontainer:latest"
 }
 
 // GetDefaultContainerConfig returns the default configuration for DefaultContainer
 func GetDefaultContainerConfig() DefaultContainerConfig {
 	return DefaultContainerConfig{
-		Image:               "ghcr.io/obra/packnplay-default:latest",
+		Image:               "ghcr.io/obra/packnplay/devcontainer:latest",
 		CheckForUpdates:     true,
 		AutoPullUpdates:     false,
 		CheckFrequencyHours: 24,

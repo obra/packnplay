@@ -1042,7 +1042,7 @@ func getConfiguredDefaultImage(runConfig *RunConfig) string {
 	if runConfig.DefaultImage != "" {
 		return runConfig.DefaultImage
 	}
-	return "ghcr.io/obra/packnplay-default:latest"
+	return "ghcr.io/obra/packnplay/devcontainer:latest"
 }
 
 // getRemoteImageInfo gets version information about an image from the registry

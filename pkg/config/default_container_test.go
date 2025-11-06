@@ -51,8 +51,8 @@ func TestGetDefaultImage(t *testing.T) {
 	// Case 2: No custom image, should use packnplay default
 	config = &Config{}
 	image = config.GetDefaultImage()
-	if image != "ghcr.io/obra/packnplay-default:latest" {
-		t.Errorf("GetDefaultImage() = %v, want ghcr.io/obra/packnplay-default:latest", image)
+	if image != "ghcr.io/obra/packnplay/devcontainer:latest" {
+		t.Errorf("GetDefaultImage() = %v, want ghcr.io/obra/packnplay/devcontainer:latest", image)
 	}
 
 	// Case 3: Empty string image, should use default
@@ -62,8 +62,8 @@ func TestGetDefaultImage(t *testing.T) {
 		},
 	}
 	image = config.GetDefaultImage()
-	if image != "ghcr.io/obra/packnplay-default:latest" {
-		t.Errorf("GetDefaultImage() = %v, want ghcr.io/obra/packnplay-default:latest", image)
+	if image != "ghcr.io/obra/packnplay/devcontainer:latest" {
+		t.Errorf("GetDefaultImage() = %v, want ghcr.io/obra/packnplay/devcontainer:latest", image)
 	}
 }
 
@@ -72,8 +72,8 @@ func TestDefaultContainerDefaults(t *testing.T) {
 
 	defaults := GetDefaultContainerConfig()
 
-	if defaults.Image != "ghcr.io/obra/packnplay-default:latest" {
-		t.Errorf("Default image = %v, want ghcr.io/obra/packnplay-default:latest", defaults.Image)
+	if defaults.Image != "ghcr.io/obra/packnplay/devcontainer:latest" {
+		t.Errorf("Default image = %v, want ghcr.io/obra/packnplay/devcontainer:latest", defaults.Image)
 	}
 
 	if !defaults.CheckForUpdates {

@@ -18,7 +18,7 @@ Configuration:
   Credentials: ~/.local/share/packnplay/credentials/
   Worktrees:   ~/.local/share/packnplay/worktrees/
 
-Default container: ghcr.io/obra/packnplay-default:latest
+Default container: ghcr.io/obra/packnplay/devcontainer:latest
   Includes: Node.js, Claude Code, OpenAI Codex, Google Gemini, GitHub CLI,
             GitHub Copilot, Qwen Code, Cursor CLI, Sourcegraph Amp
 

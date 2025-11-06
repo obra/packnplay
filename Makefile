@@ -4,7 +4,7 @@
 BINARY := packnplay
 
 # Container image
-IMAGE := ghcr.io/obra/packnplay-default:latest
+IMAGE := ghcr.io/obra/packnplay/devcontainer:latest
 
 # Go parameters
 GOCMD := go

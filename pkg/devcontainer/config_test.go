@@ -53,8 +53,8 @@ func TestLoadConfig_NotFound(t *testing.T) {
 func TestGetDefaultConfig(t *testing.T) {
 	// Test with empty string - should use default image and detect user
 	config := GetDefaultConfig("")
-	if config.Image != "ghcr.io/obra/packnplay-default:latest" {
-		t.Errorf("GetDefaultConfig(\"\") Image = %v, want ghcr.io/obra/packnplay-default:latest", config.Image)
+	if config.Image != "ghcr.io/obra/packnplay/devcontainer:latest" {
+		t.Errorf("GetDefaultConfig(\"\") Image = %v, want ghcr.io/obra/packnplay/devcontainer:latest", config.Image)
 	}
 	// RemoteUser should be detected, not hardcoded. For non-existent images, should fall back to "root"
 	if config.RemoteUser == "" {

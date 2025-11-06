@@ -49,10 +49,10 @@ func LoadConfig(projectPath string) (*Config, error) {
 }
 
 // GetDefaultConfig returns the default devcontainer config
-// If defaultImage is empty, uses "ghcr.io/obra/packnplay-default:latest"
+// If defaultImage is empty, uses "ghcr.io/obra/packnplay/devcontainer:latest"
 func GetDefaultConfig(defaultImage string) *Config {
 	if defaultImage == "" {
-		defaultImage = "ghcr.io/obra/packnplay-default:latest"
+		defaultImage = "ghcr.io/obra/packnplay/devcontainer:latest"
 	}
 
 	// Detect the best user for this image
