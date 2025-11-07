@@ -570,7 +570,29 @@ func Run(config *RunConfig) error {
 		}
 	}
 
-	// Add user-specified env vars from --env flags (these can override defaults and AWS)
+	// Apply environment variables from devcontainer.json with variable substitution
+	// This happens AFTER AWS credentials but BEFORE user --env flags
+	// so that user flags can override devcontainer vars
+	if devConfig.ContainerEnv != nil || devConfig.RemoteEnv != nil {
+		// Create substitution context for variable resolution
+		ctx := &devcontainer.SubstituteContext{
+			LocalWorkspaceFolder:     mountPath,
+			ContainerWorkspaceFolder: mountPath,
+			LocalEnv:                 getLocalEnvMap(),
+			ContainerEnv:             make(map[string]string),
+			Labels:                   labels,
+		}
+
+		// Get resolved environment variables with substitution applied
+		devEnvVars := devConfig.GetResolvedEnvironment(ctx)
+
+		// Add each resolved env var to docker args
+		for k, v := range devEnvVars {
+			args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
+		}
+	}
+
+	// Add user-specified env vars from --env flags (these can override defaults, AWS, and devcontainer)
 	for _, env := range config.Env {
 		// Support both --env KEY=value and --env KEY (pass through from host)
 		if strings.Contains(env, "=") {
@@ -796,6 +818,18 @@ func getContainerID(dockerClient *docker.Client, name string) (string, error) {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// getLocalEnvMap returns the current environment as a map
+func getLocalEnvMap() map[string]string {
+	env := make(map[string]string)
+	for _, e := range os.Environ() {
+		parts := strings.SplitN(e, "=", 2)
+		if len(parts) == 2 {
+			env[parts[0]] = parts[1]
+		}
+	}
+	return env
 }
 
 // resolveMountPath resolves symlinks to get the actual file path for mounting
