@@ -10,9 +10,11 @@ import (
 
 // Config represents a parsed devcontainer.json
 type Config struct {
-	Image       string `json:"image"`
-	DockerFile  string `json:"dockerFile"`
-	RemoteUser  string `json:"remoteUser"`
+	Image        string            `json:"image"`
+	DockerFile   string            `json:"dockerFile"`
+	RemoteUser   string            `json:"remoteUser"`
+	ContainerEnv map[string]string `json:"containerEnv,omitempty"`
+	RemoteEnv    map[string]string `json:"remoteEnv,omitempty"`
 }
 
 // LoadConfig loads and parses .devcontainer/devcontainer.json if it exists
@@ -66,4 +68,30 @@ func GetDefaultConfig(defaultImage string) *Config {
 		Image:      defaultImage,
 		RemoteUser: remoteUser,
 	}
+}
+
+// GetResolvedEnvironment applies variable substitution and returns resolved environment variables
+// First applies containerEnv, then remoteEnv (which can reference containerEnv)
+func (c *Config) GetResolvedEnvironment(ctx *SubstituteContext) map[string]string {
+	result := make(map[string]string)
+
+	// First pass: containerEnv
+	for k, v := range c.ContainerEnv {
+		resolved := substituteString(ctx, v)
+		result[k] = resolved
+		// Add to context for containerEnv: references
+		ctx.ContainerEnv[k] = resolved
+	}
+
+	// Second pass: remoteEnv (can reference containerEnv)
+	for k, v := range c.RemoteEnv {
+		if v == "" {
+			// Empty string/null removes variable
+			delete(result, k)
+		} else {
+			result[k] = substituteString(ctx, v)
+		}
+	}
+
+	return result
 }
