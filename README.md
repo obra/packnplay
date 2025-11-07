@@ -229,12 +229,45 @@ Pack 'n Play creates git worktrees in XDG-compliant locations for isolation:
 - **Auto-connect**: If container already running for a worktree, automatically connects to it
 - **Git integration**: Main repo's `.git` directory mounted so git commands work correctly
 
-### Dev Container Discovery
+### Dev Container Support
 
-1. Checks for `.devcontainer/devcontainer.json` in project
-2. Falls back to `ghcr.io/obra/packnplay-default:latest` if not found
-3. Supports both `image` (pulls) and `dockerFile` (builds) fields
-4. Auto-pulls/builds images as needed
+packnplay provides comprehensive devcontainer.json support for reproducible development environments.
+
+**Quick Example:**
+```json
+{
+  "image": "node:18",
+  "forwardPorts": [3000],
+  "containerEnv": {
+    "NODE_ENV": "development"
+  },
+  "postCreateCommand": "npm install",
+  "postStartCommand": "npm run dev"
+}
+```
+
+**Supported Fields:**
+- **Image Configuration**:
+  - `image` - Pull pre-built Docker images
+  - `dockerfile` / `build` - Build from Dockerfile with advanced options (args, target, context, cacheFrom)
+- **User Configuration**:
+  - `remoteUser` - User to run commands as (auto-detected if not specified)
+- **Environment Variables**:
+  - `containerEnv` - Set environment variables with variable substitution
+  - `remoteEnv` - Environment variables that can reference containerEnv
+  - **Variable Substitution**: `${localEnv:VAR}`, `${containerWorkspaceFolder}`, `${devcontainerId}`, etc.
+- **Port Forwarding**:
+  - `forwardPorts` - Array of ports to expose (integer or string format)
+- **Lifecycle Commands**:
+  - `onCreateCommand` - Runs **once** on container creation (tracked, re-runs if changed)
+  - `postCreateCommand` - Runs **once** after creation (tracked, re-runs if changed)
+  - `postStartCommand` - Runs **every time** container starts
+  - All three formats supported: string (shell), array (direct exec), object (parallel tasks)
+
+**📖 Full Documentation:** See [DevContainer Guide](docs/DEVCONTAINER_GUIDE.md) for complete reference with examples.
+
+**Fallback:**
+If `.devcontainer/devcontainer.json` not found, uses `ghcr.io/obra/packnplay-default:latest`
 
 **Default container includes:**
 - **Languages**: Node.js LTS, Python 3.11+ with uv, Go latest, Rust latest
