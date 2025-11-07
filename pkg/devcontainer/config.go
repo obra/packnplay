@@ -15,6 +15,7 @@ type Config struct {
 	RemoteUser   string            `json:"remoteUser"`
 	ContainerEnv map[string]string `json:"containerEnv,omitempty"`
 	RemoteEnv    map[string]string `json:"remoteEnv,omitempty"`
+	ForwardPorts []interface{}     `json:"forwardPorts,omitempty"` // int or string
 }
 
 // LoadConfig loads and parses .devcontainer/devcontainer.json if it exists
