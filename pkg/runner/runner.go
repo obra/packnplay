@@ -691,37 +691,55 @@ func Run(config *RunConfig) error {
 	}
 
 	// Step 11: Execute lifecycle commands from devcontainer.json
-	// Note: All commands run every time for now (run-once tracking to be added later)
+	// Commands are tracked: onCreate/postCreate run once, postStart always runs
 	if devConfig.OnCreateCommand != nil || devConfig.PostCreateCommand != nil || devConfig.PostStartCommand != nil {
-		executor := NewLifecycleExecutor(dockerClient, containerID, devConfig.RemoteUser, config.Verbose)
+		// Load metadata for tracking lifecycle execution
+		metadata, err := LoadMetadata(containerID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to load metadata, commands will run: %v\n", err)
+			// Continue with nil metadata - commands will run but not be tracked
+			metadata = nil
+		}
 
-		// onCreateCommand - intended to run once on creation (tracking not yet implemented)
+		executor := NewLifecycleExecutor(dockerClient, containerID, devConfig.RemoteUser, config.Verbose, metadata)
+
+		// onCreateCommand - runs once on creation, re-runs if command changes
 		if devConfig.OnCreateCommand != nil {
 			if config.Verbose {
 				fmt.Fprintf(os.Stderr, "Running onCreateCommand...\n")
 			}
-			if err := executor.Execute(devConfig.OnCreateCommand); err != nil {
+			if err := executor.Execute("onCreate", devConfig.OnCreateCommand); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: onCreateCommand failed: %v\n", err)
 			}
 		}
 
-		// postCreateCommand - intended to run once after creation (tracking not yet implemented)
+		// postCreateCommand - runs once after creation, re-runs if command changes
 		if devConfig.PostCreateCommand != nil {
 			if config.Verbose {
 				fmt.Fprintf(os.Stderr, "Running postCreateCommand...\n")
 			}
-			if err := executor.Execute(devConfig.PostCreateCommand); err != nil {
+			if err := executor.Execute("postCreate", devConfig.PostCreateCommand); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: postCreateCommand failed: %v\n", err)
 			}
 		}
 
-		// postStartCommand - intended to run every time container starts
+		// postStartCommand - runs every time container starts
 		if devConfig.PostStartCommand != nil {
 			if config.Verbose {
 				fmt.Fprintf(os.Stderr, "Running postStartCommand...\n")
 			}
-			if err := executor.Execute(devConfig.PostStartCommand); err != nil {
+			if err := executor.Execute("postStart", devConfig.PostStartCommand); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: postStartCommand failed: %v\n", err)
+			}
+		}
+
+		// Save metadata after lifecycle execution
+		if metadata != nil {
+			if err := SaveMetadata(metadata); err != nil {
+				// Warn but don't fail container startup
+				if config.Verbose {
+					fmt.Fprintf(os.Stderr, "Warning: failed to save metadata: %v\n", err)
+				}
 			}
 		}
 	}

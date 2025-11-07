@@ -17,41 +17,57 @@ type LifecycleExecutor struct {
 	containerName string
 	containerUser string
 	verbose       bool
+	metadata      *ContainerMetadata
 }
 
 // NewLifecycleExecutor creates a new lifecycle executor.
-func NewLifecycleExecutor(client DockerClient, containerName, containerUser string, verbose bool) *LifecycleExecutor {
+func NewLifecycleExecutor(client DockerClient, containerName, containerUser string, verbose bool, metadata *ContainerMetadata) *LifecycleExecutor {
 	return &LifecycleExecutor{
 		client:        client,
 		containerName: containerName,
 		containerUser: containerUser,
 		verbose:       verbose,
+		metadata:      metadata,
 	}
 }
 
 // Execute executes a lifecycle command in the container.
-func (le *LifecycleExecutor) Execute(cmd *devcontainer.LifecycleCommand) error {
+// The commandType parameter is used for tracking (e.g., "onCreate", "postCreate", "postStart").
+// Returns error if execution fails, nil if skipped or successful.
+func (le *LifecycleExecutor) Execute(commandType string, cmd *devcontainer.LifecycleCommand) error {
 	if cmd == nil {
 		return nil
 	}
 
+	// Check if command should run (based on metadata tracking)
+	if le.metadata != nil && !le.metadata.ShouldRun(commandType, cmd) {
+		if le.verbose {
+			fmt.Printf("Skipping %s (already executed)\n", commandType)
+		}
+		return nil
+	}
+
 	// Handle different command types
+	var err error
 	if cmd.IsString() {
 		str, _ := cmd.AsString()
-		return le.executeShellCommand(str)
-	}
-
-	if cmd.IsArray() {
+		err = le.executeShellCommand(str)
+	} else if cmd.IsArray() {
 		arr, _ := cmd.AsArray()
-		return le.executeDirectCommand(arr)
-	}
-
-	if cmd.IsObject() {
+		err = le.executeDirectCommand(arr)
+	} else if cmd.IsObject() {
 		obj, _ := cmd.AsObject()
-		return le.executeParallelCommands(obj)
+		err = le.executeParallelCommands(obj)
+	} else {
+		return fmt.Errorf("unknown lifecycle command type")
 	}
 
-	return fmt.Errorf("unknown lifecycle command type")
+	// Mark as executed if successful
+	if err == nil && le.metadata != nil {
+		le.metadata.MarkExecuted(commandType, cmd)
+	}
+
+	return err
 }
 
 // executeShellCommand executes a single shell command in the container.

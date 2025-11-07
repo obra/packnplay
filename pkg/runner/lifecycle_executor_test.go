@@ -15,7 +15,7 @@ func TestLifecycleExecutor_ExecuteString(t *testing.T) {
 		execCalls: [][]string{},
 	}
 
-	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false)
+	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false, nil)
 
 	// Create a string command
 	jsonData := `"npm install"`
@@ -24,7 +24,7 @@ func TestLifecycleExecutor_ExecuteString(t *testing.T) {
 		t.Fatalf("Failed to unmarshal command: %v", err)
 	}
 
-	err := executor.Execute(&cmd)
+	err := executor.Execute("onCreate", &cmd)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestLifecycleExecutor_ExecuteArray(t *testing.T) {
 		execCalls: [][]string{},
 	}
 
-	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false)
+	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false, nil)
 
 	// Create an array command
 	jsonData := `["npm", "install"]`
@@ -57,7 +57,7 @@ func TestLifecycleExecutor_ExecuteArray(t *testing.T) {
 		t.Fatalf("Failed to unmarshal command: %v", err)
 	}
 
-	err := executor.Execute(&cmd)
+	err := executor.Execute("postCreate", &cmd)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestLifecycleExecutor_ExecuteObject(t *testing.T) {
 		execCalls: [][]string{},
 	}
 
-	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false)
+	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false, nil)
 
 	// Create an object command with 2 parallel tasks
 	jsonData := `{
@@ -93,7 +93,7 @@ func TestLifecycleExecutor_ExecuteObject(t *testing.T) {
 		t.Fatalf("Failed to unmarshal command: %v", err)
 	}
 
-	err := executor.Execute(&cmd)
+	err := executor.Execute("postStart", &cmd)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestLifecycleExecutor_ExecuteError(t *testing.T) {
 		execCalls: [][]string{},
 	}
 
-	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false)
+	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false, nil)
 
 	// Create a command that will fail
 	jsonData := `"npm install"`
@@ -120,7 +120,7 @@ func TestLifecycleExecutor_ExecuteError(t *testing.T) {
 		t.Fatalf("Failed to unmarshal command: %v", err)
 	}
 
-	err := executor.Execute(&cmd)
+	err := executor.Execute("onCreate", &cmd)
 	if err == nil {
 		t.Error("Expected error, got nil")
 	}
@@ -132,10 +132,10 @@ func TestLifecycleExecutor_NilCommand(t *testing.T) {
 		execCalls: [][]string{},
 	}
 
-	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false)
+	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false, nil)
 
 	// Execute nil command (should be no-op)
-	err := executor.Execute(nil)
+	err := executor.Execute("onCreate", nil)
 	if err != nil {
 		t.Fatalf("Expected no error for nil command, got: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestLifecycleExecutor_ExecuteAllLifecycle(t *testing.T) {
 		execCalls: [][]string{},
 	}
 
-	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false)
+	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false, nil)
 
 	// Create a config with all lifecycle commands
 	jsonData := `{
@@ -169,19 +169,19 @@ func TestLifecycleExecutor_ExecuteAllLifecycle(t *testing.T) {
 
 	// Execute all lifecycle commands
 	if config.OnCreateCommand != nil {
-		if err := executor.Execute(config.OnCreateCommand); err != nil {
+		if err := executor.Execute("onCreate", config.OnCreateCommand); err != nil {
 			t.Errorf("onCreate failed: %v", err)
 		}
 	}
 
 	if config.PostCreateCommand != nil {
-		if err := executor.Execute(config.PostCreateCommand); err != nil {
+		if err := executor.Execute("postCreate", config.PostCreateCommand); err != nil {
 			t.Errorf("postCreate failed: %v", err)
 		}
 	}
 
 	if config.PostStartCommand != nil {
-		if err := executor.Execute(config.PostStartCommand); err != nil {
+		if err := executor.Execute("postStart", config.PostStartCommand); err != nil {
 			t.Errorf("postStart failed: %v", err)
 		}
 	}
@@ -200,7 +200,7 @@ func TestLifecycleExecutor_VerboseOutput(t *testing.T) {
 	}
 
 	// Create executor in verbose mode
-	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", true)
+	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", true, nil)
 
 	jsonData := `"echo 'test'"`
 	var cmd devcontainer.LifecycleCommand
@@ -208,7 +208,7 @@ func TestLifecycleExecutor_VerboseOutput(t *testing.T) {
 		t.Fatalf("Failed to unmarshal command: %v", err)
 	}
 
-	err := executor.Execute(&cmd)
+	err := executor.Execute("postStart", &cmd)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestLifecycleExecutor_MultipleParallelErrors(t *testing.T) {
 		execCalls: [][]string{},
 	}
 
-	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false)
+	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false, nil)
 
 	// Create an object command with 3 tasks that will all fail
 	jsonData := `{
@@ -245,7 +245,7 @@ func TestLifecycleExecutor_MultipleParallelErrors(t *testing.T) {
 		t.Fatalf("Failed to unmarshal command: %v", err)
 	}
 
-	err := executor.Execute(&cmd)
+	err := executor.Execute("postCreate", &cmd)
 	if err == nil {
 		t.Fatal("Expected error when all tasks fail")
 	}
