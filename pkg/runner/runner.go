@@ -681,7 +681,43 @@ func Run(config *RunConfig) error {
 		}
 	}
 
-	// Step 11: Exec into container with user's command
+	// Step 11: Execute lifecycle commands from devcontainer.json
+	// Run all lifecycle commands (onCreate metadata tracking to be added later)
+	if devConfig.OnCreateCommand != nil || devConfig.PostCreateCommand != nil || devConfig.PostStartCommand != nil {
+		executor := NewLifecycleExecutor(dockerClient, containerID, devConfig.RemoteUser, config.Verbose)
+
+		// onCreateCommand - runs once when container is created
+		if devConfig.OnCreateCommand != nil {
+			if config.Verbose {
+				fmt.Fprintf(os.Stderr, "Running onCreateCommand...\n")
+			}
+			if err := executor.Execute(devConfig.OnCreateCommand); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: onCreateCommand failed: %v\n", err)
+			}
+		}
+
+		// postCreateCommand - runs once after container is created
+		if devConfig.PostCreateCommand != nil {
+			if config.Verbose {
+				fmt.Fprintf(os.Stderr, "Running postCreateCommand...\n")
+			}
+			if err := executor.Execute(devConfig.PostCreateCommand); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: postCreateCommand failed: %v\n", err)
+			}
+		}
+
+		// postStartCommand - runs every time container starts
+		if devConfig.PostStartCommand != nil {
+			if config.Verbose {
+				fmt.Fprintf(os.Stderr, "Running postStartCommand...\n")
+			}
+			if err := executor.Execute(devConfig.PostStartCommand); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: postStartCommand failed: %v\n", err)
+			}
+		}
+	}
+
+	// Step 12: Exec into container with user's command
 	cmdPath, err := exec.LookPath(dockerClient.Command())
 	if err != nil {
 		return fmt.Errorf("failed to find docker command: %w", err)
