@@ -70,7 +70,10 @@ func (im *ImageManager) pullImage(image string) error {
 	}
 
 	// CORRECT: Pass imageName as first parameter for progress tracking
-	return im.client.RunWithProgress(image, "pull", image)
+	if err := im.client.RunWithProgress(image, "pull", image); err != nil {
+		return fmt.Errorf("failed to pull image %s: %w", image, err)
+	}
+	return nil
 }
 
 // buildImage builds a container image from Dockerfile
@@ -105,5 +108,8 @@ func (im *ImageManager) buildImage(devConfig *devcontainer.Config, projectPath s
 	}
 
 	// CORRECT: Pass imageName as first parameter for progress tracking
-	return im.client.RunWithProgress(imageName, buildArgs...)
+	if err := im.client.RunWithProgress(imageName, buildArgs...); err != nil {
+		return fmt.Errorf("failed to build image from %s: %w", devConfig.DockerFile, err)
+	}
+	return nil
 }

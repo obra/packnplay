@@ -84,6 +84,68 @@ func TestImageManager_EnsureAvailable_PullError(t *testing.T) {
 	}
 }
 
+func TestImageManager_EnsureAvailable_BuildError(t *testing.T) {
+	// Test: Error injection for build
+	mockClient := &mockDockerClient{
+		buildError: fmt.Errorf("build failed"),
+	}
+
+	im := NewImageManager(mockClient, false)
+
+	devConfig := &devcontainer.Config{
+		DockerFile: "Dockerfile",
+	}
+
+	err := im.EnsureAvailable(devConfig, "/test/project")
+	if err == nil {
+		t.Error("Expected error when build fails")
+	}
+}
+
+func TestImageManager_PullImage_AlreadyExists(t *testing.T) {
+	// Test: When image already exists locally, no pull should be attempted
+	mockClient := &mockDockerClient{
+		imageExists: true,
+	}
+
+	im := NewImageManager(mockClient, false)
+
+	devConfig := &devcontainer.Config{
+		Image: "ubuntu:22.04",
+	}
+
+	err := im.EnsureAvailable(devConfig, "/test/project")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if mockClient.pullCalled {
+		t.Error("Expected no pull to be called when image already exists")
+	}
+}
+
+func TestImageManager_BuildImage_AlreadyBuilt(t *testing.T) {
+	// Test: When image already built, no build should be attempted
+	mockClient := &mockDockerClient{
+		imageExists: true,
+	}
+
+	im := NewImageManager(mockClient, false)
+
+	devConfig := &devcontainer.Config{
+		DockerFile: "Dockerfile",
+	}
+
+	err := im.EnsureAvailable(devConfig, "/test/project")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if mockClient.buildCalled {
+		t.Error("Expected no build to be called when image already exists")
+	}
+}
+
 // mockDockerClient for testing with error injection and call tracking
 type mockDockerClient struct {
 	pullCalled   bool
@@ -91,6 +153,7 @@ type mockDockerClient struct {
 	pullError    error
 	buildError   error
 	inspectError error // Error to return for image inspect
+	imageExists  bool  // If true, image inspect succeeds (image already exists)
 	calls        []string
 }
 
@@ -116,6 +179,10 @@ func (m *mockDockerClient) Run(args ...string) (string, error) {
 
 		// For image inspect, return the configured error (default: image not found)
 		if args[0] == "image" && len(args) > 1 && args[1] == "inspect" {
+			// If imageExists is true, return success (no error)
+			if m.imageExists {
+				return "", nil
+			}
 			if m.inspectError != nil {
 				return "", m.inspectError
 			}
