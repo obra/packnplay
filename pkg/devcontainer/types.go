@@ -3,9 +3,6 @@ package devcontainer
 // SubstituteContext holds all variables available for substitution
 // Used by the variable substitution engine to resolve ${...} patterns
 type SubstituteContext struct {
-	// Platform is typically "linux", "darwin", "windows"
-	Platform string
-
 	// LocalWorkspaceFolder is the absolute path on the host machine
 	LocalWorkspaceFolder string
 

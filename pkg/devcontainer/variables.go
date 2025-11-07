@@ -1,3 +1,7 @@
+// Variable substitution implementation adapted from devcontainers/cli (MIT License)
+// Original: https://github.com/devcontainers/cli/blob/main/src/spec-common/variableSubstitution.ts
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 package devcontainer
 
 import (

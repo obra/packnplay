@@ -363,18 +363,3 @@ func TestSubstituteMultipleVariablesInString(t *testing.T) {
 		t.Errorf("Expected 'Path: /workspace, User: testuser', got '%s'", result)
 	}
 }
-
-func TestSubstitutePlatform(t *testing.T) {
-	// Test: ${platform} variable (not commonly used but in spec)
-	ctx := &SubstituteContext{
-		Platform:     "linux",
-		LocalEnv:     make(map[string]string),
-		ContainerEnv: make(map[string]string),
-	}
-
-	// Note: Platform is not typically substituted, but we should handle it gracefully
-	result := Substitute(ctx, "Platform: linux")
-	if result != "Platform: linux" {
-		t.Errorf("Expected 'Platform: linux', got '%s'", result)
-	}
-}
