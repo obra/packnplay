@@ -17,6 +17,11 @@ type Config struct {
 	ContainerEnv map[string]string `json:"containerEnv,omitempty"`
 	RemoteEnv    map[string]string `json:"remoteEnv,omitempty"`
 	ForwardPorts []interface{}     `json:"forwardPorts,omitempty"` // int or string
+
+	// Lifecycle commands
+	OnCreateCommand   *LifecycleCommand `json:"onCreateCommand,omitempty"`
+	PostCreateCommand *LifecycleCommand `json:"postCreateCommand,omitempty"`
+	PostStartCommand  *LifecycleCommand `json:"postStartCommand,omitempty"`
 }
 
 // LoadConfig loads and parses .devcontainer/devcontainer.json if it exists

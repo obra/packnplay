@@ -152,10 +152,13 @@ type mockDockerClient struct {
 	buildCalled  bool
 	pullError    error
 	buildError   error
-	inspectError error     // Error to return for image inspect
-	imageExists  bool      // If true, image inspect succeeds (image already exists)
-	calls        []string  // Track command names
-	capturedArgs [][]string // Track all args for detailed verification
+	inspectError error       // Error to return for image inspect
+	imageExists  bool        // If true, image inspect succeeds (image already exists)
+	calls        []string    // Track command names
+	capturedArgs [][]string  // Track all args for detailed verification
+	execCalls    [][]string  // Track exec calls for lifecycle testing
+	execOutput   string      // Output to return for exec
+	execError    error       // Error to return for exec
 }
 
 func (m *mockDockerClient) RunWithProgress(imageName string, args ...string) error {
@@ -177,6 +180,15 @@ func (m *mockDockerClient) RunWithProgress(imageName string, args ...string) err
 func (m *mockDockerClient) Run(args ...string) (string, error) {
 	if len(args) > 0 {
 		m.calls = append(m.calls, args[0])
+
+		// Track exec calls
+		if args[0] == "exec" {
+			m.execCalls = append(m.execCalls, args)
+			if m.execError != nil {
+				return "", m.execError
+			}
+			return m.execOutput, nil
+		}
 
 		// For image inspect, return the configured error (default: image not found)
 		if args[0] == "image" && len(args) > 1 && args[1] == "inspect" {
