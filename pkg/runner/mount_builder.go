@@ -53,7 +53,7 @@ func (mb *MountBuilder) BuildMounts(cfg *RunConfig) ([]string, error) {
 	args = append(args, credMounts...)
 
 	// 4. Mount agent configs using Agent abstraction (NOT hardcoded list)
-	agentMounts := mb.buildAgentMounts()
+	agentMounts := mb.BuildAgentMounts()
 	args = append(args, agentMounts...)
 
 	return args, nil
@@ -114,9 +114,10 @@ func (mb *MountBuilder) buildCredentialMounts(creds config.Credentials) []string
 	return args
 }
 
-// buildAgentMounts constructs agent config directory mounts
+// BuildAgentMounts constructs agent config directory mounts
 // Uses the Agent abstraction instead of hardcoded list (fixes architectural smell)
-func (mb *MountBuilder) buildAgentMounts() []string {
+// Exported for use in runner.Run() to replace hardcoded agent list
+func (mb *MountBuilder) BuildAgentMounts() []string {
 	var args []string
 
 	for _, agent := range agents.GetSupportedAgents() {

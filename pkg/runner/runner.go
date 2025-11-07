@@ -150,9 +150,10 @@ func Run(config *RunConfig) error {
 		return fmt.Errorf("failed to initialize container runtime: %w", err)
 	}
 
-	// Step 5: Ensure image available
-	if err := ensureImage(dockerClient, devConfig, mountPath, config.Verbose); err != nil {
-		return err
+	// Step 5: Ensure image available using ImageManager service
+	imageManager := NewImageManager(dockerClient, config.Verbose)
+	if err := imageManager.EnsureAvailable(devConfig, mountPath); err != nil {
+		return fmt.Errorf("failed to ensure image: %w", err)
 	}
 
 	// Step 6: Generate container name and labels
@@ -356,17 +357,10 @@ func Run(config *RunConfig) error {
 	// Mount workspace at host path (preserving absolute paths)
 	args = append(args, "-v", fmt.Sprintf("%s:%s", mountPath, mountPath))
 
-	// Mount AI agent config directories if they exist
-	agentConfigDirs := []string{".codex", ".gemini", ".copilot", ".qwen", ".cursor", ".deepseek"}
-	for _, configDir := range agentConfigDirs {
-		agentPath := filepath.Join(homeDir, configDir)
-		if fileExists(agentPath) {
-			args = append(args, "-v", fmt.Sprintf("%s:/home/%s/%s", agentPath, devConfig.RemoteUser, configDir))
-			if config.Verbose {
-				fmt.Fprintf(os.Stderr, "Mounting %s config directory\n", configDir)
-			}
-		}
-	}
+	// Mount AI agent config directories using MountBuilder (replaces hardcoded list)
+	mountBuilder := NewMountBuilder(homeDir, devConfig.RemoteUser)
+	agentMounts := mountBuilder.BuildAgentMounts()
+	args = append(args, agentMounts...)
 
 	// Mount .config/amp directory for Sourcegraph Amp CLI if it exists
 	ampConfigPath := filepath.Join(homeDir, ".config", "amp")
@@ -682,59 +676,6 @@ func Run(config *RunConfig) error {
 	return syscall.Exec(cmdPath, execArgs, os.Environ())
 }
 
-func ensureImage(dockerClient *docker.Client, config *devcontainer.Config, projectPath string, verbose bool) error {
-	var imageName string
-
-	if config.DockerFile != "" {
-		// Need to build from Dockerfile
-		projectName := filepath.Base(projectPath)
-		imageName = fmt.Sprintf("packnplay-%s-devcontainer:latest", projectName)
-
-		// Check if already built
-		_, err := dockerClient.Run("image", "inspect", imageName)
-		if err != nil {
-			// Need to build
-			if verbose {
-				fmt.Fprintf(os.Stderr, "Building image from %s\n", config.DockerFile)
-			}
-
-			dockerfilePath := filepath.Join(projectPath, ".devcontainer", config.DockerFile)
-			contextPath := filepath.Join(projectPath, ".devcontainer")
-
-			// Use progress bar for build
-			err := dockerClient.RunWithProgress(imageName, "build", "-f", dockerfilePath, "-t", imageName, contextPath)
-			if err != nil {
-				return fmt.Errorf("failed to build image from %s: %w", config.DockerFile, err)
-			}
-		}
-	} else {
-		// Use pre-built image
-		imageName = config.Image
-
-		// Check if exists locally
-		_, err := dockerClient.Run("image", "inspect", imageName)
-		if err != nil {
-			// Need to pull
-			if verbose {
-				fmt.Fprintf(os.Stderr, "Pulling image %s\n", imageName)
-			}
-
-			// Use progress bar for pull
-			err := dockerClient.RunWithProgress(imageName, "pull", imageName)
-			if err != nil {
-				return fmt.Errorf("failed to pull image %s: %w", imageName, err)
-			}
-		} else {
-			// Image exists locally - check if user should be notified about newer versions
-			err := checkAndNotifyAboutUpdates(dockerClient, imageName, verbose)
-			if err != nil && verbose {
-				fmt.Fprintf(os.Stderr, "Warning: failed to check for updates: %v\n", err)
-			}
-		}
-	}
-
-	return nil
-}
 
 func containerIsRunning(dockerClient *docker.Client, name string) (bool, error) {
 	// Apple Container doesn't support --filter, so get all and filter client-side
