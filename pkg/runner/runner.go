@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -586,9 +587,14 @@ func Run(config *RunConfig) error {
 		// Get resolved environment variables with substitution applied
 		devEnvVars := devConfig.GetResolvedEnvironment(ctx)
 
-		// Add each resolved env var to docker args
-		for k, v := range devEnvVars {
-			args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
+		// Add each resolved env var to docker args in deterministic order
+		var envKeys []string
+		for k := range devEnvVars {
+			envKeys = append(envKeys, k)
+		}
+		sort.Strings(envKeys)
+		for _, k := range envKeys {
+			args = append(args, "-e", fmt.Sprintf("%s=%s", k, devEnvVars[k]))
 		}
 	}
 
@@ -608,17 +614,20 @@ func Run(config *RunConfig) error {
 
 	// Parse and apply port forwarding from devcontainer.json
 	// Devcontainer ports are prepended so CLI -p flags take priority
+	var publishPorts []string
 	if len(devConfig.ForwardPorts) > 0 {
 		devPorts, err := devcontainer.ParseForwardPorts(devConfig.ForwardPorts)
 		if err != nil {
 			return fmt.Errorf("failed to parse forwardPorts from devcontainer.json: %w", err)
 		}
 		// Prepend devcontainer ports so CLI -p flags (in config.PublishPorts) override
-		config.PublishPorts = append(devPorts, config.PublishPorts...)
+		publishPorts = append(devPorts, config.PublishPorts...)
+	} else {
+		publishPorts = config.PublishPorts
 	}
 
 	// Add port mappings (devcontainer ports + CLI -p flags)
-	for _, port := range config.PublishPorts {
+	for _, port := range publishPorts {
 		args = append(args, "-p", port)
 	}
 
@@ -682,11 +691,11 @@ func Run(config *RunConfig) error {
 	}
 
 	// Step 11: Execute lifecycle commands from devcontainer.json
-	// Run all lifecycle commands (onCreate metadata tracking to be added later)
+	// Note: All commands run every time for now (run-once tracking to be added later)
 	if devConfig.OnCreateCommand != nil || devConfig.PostCreateCommand != nil || devConfig.PostStartCommand != nil {
 		executor := NewLifecycleExecutor(dockerClient, containerID, devConfig.RemoteUser, config.Verbose)
 
-		// onCreateCommand - runs once when container is created
+		// onCreateCommand - intended to run once on creation (tracking not yet implemented)
 		if devConfig.OnCreateCommand != nil {
 			if config.Verbose {
 				fmt.Fprintf(os.Stderr, "Running onCreateCommand...\n")
@@ -696,7 +705,7 @@ func Run(config *RunConfig) error {
 			}
 		}
 
-		// postCreateCommand - runs once after container is created
+		// postCreateCommand - intended to run once after creation (tracking not yet implemented)
 		if devConfig.PostCreateCommand != nil {
 			if config.Verbose {
 				fmt.Fprintf(os.Stderr, "Running postCreateCommand...\n")
@@ -706,7 +715,7 @@ func Run(config *RunConfig) error {
 			}
 		}
 
-		// postStartCommand - runs every time container starts
+		// postStartCommand - intended to run every time container starts
 		if devConfig.PostStartCommand != nil {
 			if config.Verbose {
 				fmt.Fprintf(os.Stderr, "Running postStartCommand...\n")
