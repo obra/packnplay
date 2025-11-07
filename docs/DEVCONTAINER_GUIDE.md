@@ -442,11 +442,54 @@ You can manually inspect or delete metadata files.
 
 ## Known Limitations
 
-1. **No `features` support**: Devcontainer features are not yet implemented
-2. **No `customizations` support**: VS Code extensions/settings not supported
-3. **Simple lifecycle only**: No `initializeCommand`, `updateContentCommand`, etc.
-4. **No timeout**: Long-running lifecycle commands don't timeout (future enhancement)
-5. **Metadata per container**: Rebuilding image creates new metadata
+packnplay focuses on **core devcontainer functionality for AI coding agents** while maintaining compatibility with the devcontainer specification. The following features are intentionally not supported:
+
+### Out of Scope (VS Code-Specific)
+
+1. **`features`**: Devcontainer features are VS Code-specific and require complex installation system
+   - **Why**: Large implementation surface area, tightly coupled to VS Code
+   - **Alternative**: Use custom Dockerfile with pre-installed tools
+
+2. **`customizations`**: Editor-specific extensions and settings
+   - **Why**: Editor-agnostic tool, not tied to VS Code
+   - **Alternative**: Configure your editor separately
+
+### Out of Scope (Security/Complexity)
+
+3. **`initializeCommand`**: Runs on host before container starts
+   - **Why**: Security concern (arbitrary host code execution)
+   - **Alternative**: Use shell scripts or Makefile on host
+
+4. **`updateContentCommand`**: Runs when container content changes
+   - **Why**: Requires content change detection system
+   - **Alternative**: Use `postCreateCommand` for one-time setup
+
+5. **`postAttachCommand`**: Runs after attaching to container
+   - **Why**: Requires attach detection infrastructure
+   - **Alternative**: Run commands manually after attach
+
+### Future Enhancements
+
+6. **`mounts`**: Additional volume mounts
+   - **Status**: May be implemented if users request
+   - **Alternative**: Use custom Dockerfile with VOLUME directives
+
+7. **Lifecycle command timeouts**: Commands don't timeout
+   - **Status**: Future enhancement planned
+   - **Alternative**: Use timeout command in shell: `timeout 60 npm install`
+
+### Technical Limitations
+
+8. **Metadata per container**: Rebuilding image creates new container ID, new metadata
+   - **Impact**: Lifecycle commands re-run after rebuild
+   - **Workaround**: None needed (expected behavior)
+
+### Compatibility Notes
+
+- packnplay implements a **useful subset** of the devcontainer specification
+- devcontainer.json files are portable between packnplay and VS Code Remote Containers
+- Unsupported fields are silently ignored (no errors)
+- See comparison table in "Comparison with VS Code Remote Containers" section above
 
 ## Examples
 

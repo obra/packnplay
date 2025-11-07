@@ -508,6 +508,36 @@ packnplay stop --worktree=feature
 packnplay stop --all
 ```
 
+## Testing
+
+packnplay has comprehensive test coverage with both unit tests and end-to-end integration tests.
+
+### Running Tests
+
+```bash
+# Run all unit tests (fast, no Docker required)
+go test -short ./...
+
+# Run all tests including E2E tests (requires Docker daemon)
+go test ./...
+
+# Run only E2E tests
+go test ./pkg/runner -run TestE2E
+
+# Run specific E2E test
+go test -v ./pkg/runner -run TestE2E_OnCreateCommand_RunsOnce
+```
+
+### Test Requirements
+
+- **Unit Tests**: No dependencies, run with `-short` flag
+- **E2E Tests**: Require Docker daemon running
+  - Tests skip gracefully if Docker unavailable
+  - Tests clean up all containers and metadata automatically
+  - Tests use real Docker (no mocks)
+
+For more details, see [Testing Guide](docs/TESTING.md).
+
 ## Credits
 
 - The core ergonomics of the packnplay tool were heavily inspired by [StrongDM Leash](https://github.com/strongdm/leash), which has actual authorization and visibility features that make your use of agents safer, rather than just being wrapper around `docker` commandline invocations like this tool.
