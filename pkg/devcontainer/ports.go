@@ -17,7 +17,12 @@ func ParseForwardPorts(ports []interface{}) ([]string, error) {
 		case float64:
 			// JSON numbers are float64
 			// Single port: 3000 → "3000:3000"
-			portStr := fmt.Sprintf("%.0f:%.0f", v, v)
+			// Validate port range
+			portNum := int(v)
+			if portNum < 1 || portNum > 65535 {
+				return nil, fmt.Errorf("invalid port number: %d (must be 1-65535)", portNum)
+			}
+			portStr := fmt.Sprintf("%d:%d", portNum, portNum)
 			result = append(result, portStr)
 
 		case string:

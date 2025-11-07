@@ -78,3 +78,41 @@ func TestParseForwardPorts_Empty(t *testing.T) {
 		t.Errorf("Expected empty result, got %d ports", len(result))
 	}
 }
+
+func TestParseForwardPorts_Nil(t *testing.T) {
+	result, err := ParseForwardPorts(nil)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(result) != 0 {
+		t.Errorf("Expected empty result for nil input, got %d ports", len(result))
+	}
+}
+
+func TestParseForwardPorts_NegativePort(t *testing.T) {
+	ports := []interface{}{float64(-1)}
+
+	_, err := ParseForwardPorts(ports)
+	if err == nil {
+		t.Error("Expected error for negative port number")
+	}
+}
+
+func TestParseForwardPorts_ZeroPort(t *testing.T) {
+	ports := []interface{}{float64(0)}
+
+	_, err := ParseForwardPorts(ports)
+	if err == nil {
+		t.Error("Expected error for zero port number")
+	}
+}
+
+func TestParseForwardPorts_OutOfRangePort(t *testing.T) {
+	ports := []interface{}{float64(65536)}
+
+	_, err := ParseForwardPorts(ports)
+	if err == nil {
+		t.Error("Expected error for out-of-range port number")
+	}
+}
