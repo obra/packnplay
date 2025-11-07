@@ -12,6 +12,7 @@ import (
 type Config struct {
 	Image        string            `json:"image"`
 	DockerFile   string            `json:"dockerFile"`
+	Build        *BuildConfig      `json:"build,omitempty"`
 	RemoteUser   string            `json:"remoteUser"`
 	ContainerEnv map[string]string `json:"containerEnv,omitempty"`
 	RemoteEnv    map[string]string `json:"remoteEnv,omitempty"`
@@ -69,6 +70,19 @@ func GetDefaultConfig(defaultImage string) *Config {
 		Image:      defaultImage,
 		RemoteUser: remoteUser,
 	}
+}
+
+// GetDockerfile returns the dockerfile path from either DockerFile field or Build.Dockerfile
+func (c *Config) GetDockerfile() string {
+	if c.Build != nil && c.Build.Dockerfile != "" {
+		return c.Build.Dockerfile
+	}
+	return c.DockerFile
+}
+
+// HasDockerfile returns true if a dockerfile is specified
+func (c *Config) HasDockerfile() bool {
+	return c.GetDockerfile() != ""
 }
 
 // GetResolvedEnvironment applies variable substitution and returns resolved environment variables

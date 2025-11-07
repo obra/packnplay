@@ -39,8 +39,8 @@ func NewImageManager(client DockerClient, verbose bool) *ImageManager {
 // If an image name is specified, it pulls the image if not already present.
 // Returns an error if neither image nor Dockerfile is specified.
 func (im *ImageManager) EnsureAvailable(devConfig *devcontainer.Config, projectPath string) error {
-	// If Dockerfile specified, build it
-	if devConfig.DockerFile != "" {
+	// If Dockerfile specified (either DockerFile or Build.Dockerfile), build it
+	if devConfig.HasDockerfile() {
 		return im.buildImage(devConfig, projectPath)
 	}
 
@@ -78,6 +78,11 @@ func (im *ImageManager) pullImage(image string) error {
 
 // buildImage builds a container image from Dockerfile
 // Extracted from runner.Run() lines 685-737
+//
+// SECURITY WARNING: Build args are persisted in image metadata and can be
+// inspected with `docker history`. Users should not put secrets in build args.
+// For secrets, use containerEnv with ${localEnv:SECRET} variable substitution
+// which injects secrets at runtime without persisting them in the image.
 func (im *ImageManager) buildImage(devConfig *devcontainer.Config, projectPath string) error {
 	projectName := filepath.Base(projectPath)
 	imageName := fmt.Sprintf("packnplay-%s-devcontainer:latest", projectName)
@@ -92,24 +97,50 @@ func (im *ImageManager) buildImage(devConfig *devcontainer.Config, projectPath s
 		return nil
 	}
 
-	// Need to build
-	if im.verbose {
-		fmt.Fprintf(os.Stderr, "Building image from %s\n", devConfig.DockerFile)
+	// Use GetDockerfile() helper which checks both DockerFile and Build.Dockerfile
+	dockerfile := devConfig.GetDockerfile()
+	if dockerfile == "" {
+		return fmt.Errorf("no dockerfile specified")
 	}
 
-	dockerfilePath := filepath.Join(projectPath, ".devcontainer", devConfig.DockerFile)
-	contextPath := filepath.Join(projectPath, ".devcontainer")
+	// Need to build
+	if im.verbose {
+		fmt.Fprintf(os.Stderr, "Building image from %s\n", dockerfile)
+	}
 
-	buildArgs := []string{
-		"build",
-		"-f", dockerfilePath,
-		"-t", imageName,
-		contextPath,
+	var buildArgs []string
+
+	// If Build configuration exists, use it for advanced options
+	if devConfig.Build != nil {
+		// Make a copy of Build config to modify paths
+		buildConfig := *devConfig.Build
+
+		// Adjust paths to be relative to .devcontainer directory
+		buildConfig.Dockerfile = filepath.Join(projectPath, ".devcontainer", buildConfig.Dockerfile)
+		if buildConfig.Context != "" {
+			buildConfig.Context = filepath.Join(projectPath, ".devcontainer", buildConfig.Context)
+		} else {
+			buildConfig.Context = filepath.Join(projectPath, ".devcontainer")
+		}
+
+		// Use BuildConfig to generate docker args
+		buildArgs = buildConfig.ToDockerArgs(imageName)
+	} else {
+		// Simple build without advanced options
+		dockerfilePath := filepath.Join(projectPath, ".devcontainer", dockerfile)
+		contextPath := filepath.Join(projectPath, ".devcontainer")
+
+		buildArgs = []string{
+			"build",
+			"-f", dockerfilePath,
+			"-t", imageName,
+			contextPath,
+		}
 	}
 
 	// CORRECT: Pass imageName as first parameter for progress tracking
 	if err := im.client.RunWithProgress(imageName, buildArgs...); err != nil {
-		return fmt.Errorf("failed to build image from %s: %w", devConfig.DockerFile, err)
+		return fmt.Errorf("failed to build image from %s: %w", dockerfile, err)
 	}
 	return nil
 }

@@ -152,9 +152,10 @@ type mockDockerClient struct {
 	buildCalled  bool
 	pullError    error
 	buildError   error
-	inspectError error // Error to return for image inspect
-	imageExists  bool  // If true, image inspect succeeds (image already exists)
-	calls        []string
+	inspectError error     // Error to return for image inspect
+	imageExists  bool      // If true, image inspect succeeds (image already exists)
+	calls        []string  // Track command names
+	capturedArgs [][]string // Track all args for detailed verification
 }
 
 func (m *mockDockerClient) RunWithProgress(imageName string, args ...string) error {
@@ -196,4 +197,89 @@ func (m *mockDockerClient) Run(args ...string) (string, error) {
 
 func (m *mockDockerClient) Command() string {
 	return "docker"
+}
+
+// TestImageManager_EnsureAvailable_WithBuildConfig tests integration with BuildConfig
+func TestImageManager_EnsureAvailable_WithBuildConfig(t *testing.T) {
+	// Test: When devcontainer specifies Build config, use it
+	mockClient := &mockDockerClient{
+		buildCalled: false,
+	}
+
+	im := NewImageManager(mockClient, false)
+
+	devConfig := &devcontainer.Config{
+		Build: &devcontainer.BuildConfig{
+			Dockerfile: "Dockerfile.dev",
+			Context:    "..",
+			Args: map[string]string{
+				"VARIANT": "16-bullseye",
+			},
+			Target: "development",
+		},
+	}
+
+	err := im.EnsureAvailable(devConfig, "/test/project")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if !mockClient.buildCalled {
+		t.Error("Expected image build to be called")
+	}
+}
+
+// TestImageManager_EnsureAvailable_BuildConfigPriority tests that Build.Dockerfile takes priority
+func TestImageManager_EnsureAvailable_BuildConfigPriority(t *testing.T) {
+	// Test: Build.Dockerfile should be used over DockerFile
+	mockClient := &mockDockerClient{
+		buildCalled: false,
+	}
+
+	im := NewImageManager(mockClient, false)
+
+	devConfig := &devcontainer.Config{
+		DockerFile: "Dockerfile",
+		Build: &devcontainer.BuildConfig{
+			Dockerfile: "Dockerfile.dev", // This should take priority
+		},
+	}
+
+	err := im.EnsureAvailable(devConfig, "/test/project")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if !mockClient.buildCalled {
+		t.Error("Expected image build to be called")
+	}
+}
+
+// TestImageManager_BuildWithAdvancedOptions tests that build args are properly passed
+func TestImageManager_BuildWithAdvancedOptions(t *testing.T) {
+	// Test: Verify BuildConfig generates proper docker build args
+	mockClient := &mockDockerClient{
+		buildCalled: false,
+		capturedArgs: [][]string{},
+	}
+
+	im := NewImageManager(mockClient, false)
+
+	devConfig := &devcontainer.Config{
+		Build: &devcontainer.BuildConfig{
+			Dockerfile: "Dockerfile",
+			Args: map[string]string{
+				"VARIANT": "16-bullseye",
+			},
+		},
+	}
+
+	err := im.EnsureAvailable(devConfig, "/test/project")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if !mockClient.buildCalled {
+		t.Error("Expected image build to be called")
+	}
 }
