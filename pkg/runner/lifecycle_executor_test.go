@@ -225,6 +225,43 @@ type mockDockerClientWithExec struct {
 	execError  error
 }
 
+// TestLifecycleExecutor_MultipleParallelErrors tests handling of multiple task failures
+func TestLifecycleExecutor_MultipleParallelErrors(t *testing.T) {
+	mockClient := &mockDockerClient{
+		execError: fmt.Errorf("command failed"),
+		execCalls: [][]string{},
+	}
+
+	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false)
+
+	// Create an object command with 3 tasks that will all fail
+	jsonData := `{
+		"task1": "echo 'task 1'",
+		"task2": "echo 'task 2'",
+		"task3": "echo 'task 3'"
+	}`
+	var cmd devcontainer.LifecycleCommand
+	if err := cmd.UnmarshalJSON([]byte(jsonData)); err != nil {
+		t.Fatalf("Failed to unmarshal command: %v", err)
+	}
+
+	err := executor.Execute(&cmd)
+	if err == nil {
+		t.Fatal("Expected error when all tasks fail")
+	}
+
+	// Error should mention multiple failures
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "multiple tasks failed") {
+		t.Errorf("Expected error to mention multiple failures, got: %s", errMsg)
+	}
+
+	// Should contain task names
+	if !strings.Contains(errMsg, "task") {
+		t.Errorf("Expected error to include task names, got: %s", errMsg)
+	}
+}
+
 // contains checks if a string slice contains all the given strings
 func contains(slice []string, strs ...string) bool {
 	sliceStr := strings.Join(slice, " ")

@@ -9,6 +9,11 @@ import (
 // - String: single shell command (e.g., "npm install")
 // - Array: command with arguments (e.g., ["npm", "install"])
 // - Object: multiple commands to run in parallel (e.g., {"server": "npm start", "watch": "npm run watch"})
+//
+// Note: Empty commands are valid:
+//   - Empty string "": No operation (shell returns immediately)
+//   - Empty array []: No operation (no command to execute)
+//   - Empty object {}: No operation (no tasks to run)
 type LifecycleCommand struct {
 	raw interface{} // string | []interface{} | map[string]interface{}
 }
@@ -63,7 +68,12 @@ func (lc *LifecycleCommand) AsArray() ([]string, bool) {
 	return nil, false
 }
 
-// AsObject returns the command as an object (map) if it is one
+// AsObject returns the command as an object (map) if it is one.
+// The map values can be:
+//   - string: shell command
+//   - []interface{}: array command (each element should be string)
+//
+// Callers must perform type assertions on the values.
 func (lc *LifecycleCommand) AsObject() (map[string]interface{}, bool) {
 	if obj, ok := lc.raw.(map[string]interface{}); ok {
 		return obj, true

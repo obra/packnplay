@@ -8,6 +8,10 @@ import (
 )
 
 // LifecycleExecutor executes lifecycle commands in a container.
+// It supports three command formats:
+//   - String: Shell command executed via sh -c
+//   - Array: Direct command execution without shell
+//   - Object: Multiple commands executed in parallel
 type LifecycleExecutor struct {
 	client        DockerClient
 	containerName string
@@ -135,10 +139,25 @@ func (le *LifecycleExecutor) executeParallelCommands(commands map[string]interfa
 	wg.Wait()
 	close(errChan)
 
-	// Check for errors
+	// Collect all errors
+	var errors []error
 	for err := range errChan {
-		return err // Return first error
+		errors = append(errors, err)
 	}
 
-	return nil
+	if len(errors) == 0 {
+		return nil
+	}
+
+	// Return single error or combined error message
+	if len(errors) == 1 {
+		return errors[0]
+	}
+
+	// Multiple errors - combine them
+	errMsg := "multiple tasks failed:"
+	for _, err := range errors {
+		errMsg += fmt.Sprintf("\n  - %s", err.Error())
+	}
+	return fmt.Errorf("%s", errMsg)
 }
