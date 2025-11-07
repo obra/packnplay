@@ -3,6 +3,7 @@ package devcontainer
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -304,3 +305,118 @@ func TestBuildConfig_ToDockerArgs_BuildArgsOrder(t *testing.T) {
 		t.Errorf("Expected 2 --build-arg flags, got %d", buildArgCount)
 	}
 }
+
+// TestBuildConfig_CacheFromInvalidType tests error handling for invalid cacheFrom type
+func TestBuildConfig_CacheFromInvalidType(t *testing.T) {
+	jsonData := `{
+		"dockerfile": "Dockerfile",
+		"cacheFrom": 123
+	}`
+
+	var build BuildConfig
+	err := json.Unmarshal([]byte(jsonData), &build)
+	if err == nil {
+		t.Error("Expected error for cacheFrom as number")
+	}
+
+	expectedError := "cacheFrom must be string or array"
+	if err != nil && !strings.Contains(err.Error(), expectedError) {
+		t.Errorf("Expected error containing '%s', got: %v", expectedError, err)
+	}
+}
+
+// TestBuildConfig_CacheFromArrayWithNonString tests error handling for non-string in cacheFrom array
+func TestBuildConfig_CacheFromArrayWithNonString(t *testing.T) {
+	jsonData := `{
+		"dockerfile": "Dockerfile",
+		"cacheFrom": ["valid", 123, "another"]
+	}`
+
+	var build BuildConfig
+	err := json.Unmarshal([]byte(jsonData), &build)
+	if err == nil {
+		t.Error("Expected error for cacheFrom array with non-string element")
+	}
+
+	expectedError := "cacheFrom array must contain strings"
+	if err != nil && !strings.Contains(err.Error(), expectedError) {
+		t.Errorf("Expected error containing '%s', got: %v", expectedError, err)
+	}
+}
+
+// TestBuildConfig_CacheFromObject tests error handling for cacheFrom as object
+func TestBuildConfig_CacheFromObjectInvalid(t *testing.T) {
+	jsonData := `{
+		"dockerfile": "Dockerfile",
+		"cacheFrom": {"invalid": "object"}
+	}`
+
+	var build BuildConfig
+	err := json.Unmarshal([]byte(jsonData), &build)
+	if err == nil {
+		t.Error("Expected error for cacheFrom as object")
+	}
+}
+
+// TestBuildConfig_CacheFromEmptyArray tests empty cacheFrom array is valid
+func TestBuildConfig_CacheFromEmptyArray(t *testing.T) {
+	jsonData := `{
+		"dockerfile": "Dockerfile",
+		"cacheFrom": []
+	}`
+
+	var build BuildConfig
+	if err := json.Unmarshal([]byte(jsonData), &build); err != nil {
+		t.Fatalf("Failed to parse build config with empty cacheFrom array: %v", err)
+	}
+
+	if len(build.CacheFrom) != 0 {
+		t.Errorf("Expected empty cacheFrom array, got %d elements", len(build.CacheFrom))
+	}
+}
+
+// TestBuildConfig_ArgsWithSpecialCharacters tests build args with special characters
+func TestBuildConfig_ArgsWithSpecialCharacters(t *testing.T) {
+	jsonData := `{
+		"dockerfile": "Dockerfile",
+		"args": {
+			"URL": "https://example.com:8080/path?query=value",
+			"EMPTY": "",
+			"EQUALS": "key=value",
+			"SPACES": "value with spaces"
+		}
+	}`
+
+	var build BuildConfig
+	if err := json.Unmarshal([]byte(jsonData), &build); err != nil {
+		t.Fatalf("Failed to parse build config with special characters: %v", err)
+	}
+
+	expectedArgs := map[string]string{
+		"URL":    "https://example.com:8080/path?query=value",
+		"EMPTY":  "",
+		"EQUALS": "key=value",
+		"SPACES": "value with spaces",
+	}
+
+	if !reflect.DeepEqual(build.Args, expectedArgs) {
+		t.Errorf("Expected args=%v, got %v", expectedArgs, build.Args)
+	}
+}
+
+// TestBuildConfig_InvalidJSON tests error handling for malformed JSON
+func TestBuildConfig_InvalidJSON(t *testing.T) {
+	jsonData := `{
+		"dockerfile": "Dockerfile",
+		"args": {
+			"KEY": incomplete
+		}
+	}`
+
+	var build BuildConfig
+	err := json.Unmarshal([]byte(jsonData), &build)
+	if err == nil {
+		t.Error("Expected error for invalid JSON")
+	}
+}
+

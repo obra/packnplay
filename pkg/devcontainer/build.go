@@ -5,16 +5,26 @@ import (
 	"fmt"
 )
 
-// BuildConfig represents build configuration for devcontainer
+// BuildConfig represents build configuration for devcontainer.
+// Corresponds to the "build" property in devcontainer.json.
 type BuildConfig struct {
-	Dockerfile string            `json:"dockerfile"`
-	Context    string            `json:"context,omitempty"`
-	Args       map[string]string `json:"args,omitempty"`
-	Target     string            `json:"target,omitempty"`
-	CacheFrom  []string          `json:"-"` // Handled by custom unmarshal
-	Options    []string          `json:"options,omitempty"`
+	// Dockerfile path relative to .devcontainer directory
+	Dockerfile string `json:"dockerfile"`
 
-	cacheFromRaw interface{} // Store raw value for unmarshal
+	// Context is the build context path (defaults to .devcontainer if empty)
+	Context string `json:"context,omitempty"`
+
+	// Args are build-time variables passed to docker build
+	Args map[string]string `json:"args,omitempty"`
+
+	// Target specifies which build stage to build in multi-stage Dockerfiles
+	Target string `json:"target,omitempty"`
+
+	// CacheFrom specifies images to use as cache sources (can be string or array in JSON)
+	CacheFrom []string `json:"-"` // Handled by custom unmarshal
+
+	// Options are additional docker build flags
+	Options []string `json:"options,omitempty"`
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling to handle cacheFrom as string or array
