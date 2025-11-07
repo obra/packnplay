@@ -606,7 +606,18 @@ func Run(config *RunConfig) error {
 		}
 	}
 
-	// Add port mappings
+	// Parse and apply port forwarding from devcontainer.json
+	// Devcontainer ports are prepended so CLI -p flags take priority
+	if len(devConfig.ForwardPorts) > 0 {
+		devPorts, err := devcontainer.ParseForwardPorts(devConfig.ForwardPorts)
+		if err != nil {
+			return fmt.Errorf("failed to parse forwardPorts from devcontainer.json: %w", err)
+		}
+		// Prepend devcontainer ports so CLI -p flags (in config.PublishPorts) override
+		config.PublishPorts = append(devPorts, config.PublishPorts...)
+	}
+
+	// Add port mappings (devcontainer ports + CLI -p flags)
 	for _, port := range config.PublishPorts {
 		args = append(args, "-p", port)
 	}
