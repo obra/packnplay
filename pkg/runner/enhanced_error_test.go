@@ -2,6 +2,8 @@ package runner
 
 import (
 	"testing"
+
+	"github.com/obra/packnplay/pkg/container"
 )
 
 func TestParseLabelsFromString(t *testing.T) {
@@ -41,7 +43,11 @@ func TestParseLabelsFromString(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			project, worktree, hostPath, launchCmd := parseLabelsFromString(tc.labels)
+			labels := container.ParseLabels(tc.labels)
+			project := container.GetProjectFromLabels(labels)
+			worktree := container.GetWorktreeFromLabels(labels)
+			hostPath := container.GetHostPathFromLabels(labels)
+			launchCmd := container.GetLaunchCommandFromLabels(labels)
 
 			if project != tc.expectedProject {
 				t.Errorf("project = %v, want %v", project, tc.expectedProject)

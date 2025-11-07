@@ -746,7 +746,11 @@ func getContainerDetails(dockerClient *docker.Client, name string) (*ContainerDe
 	}
 
 	// Parse labels to get detailed information
-	project, worktree, hostPath, launchCommand := parseLabelsFromString(containerInfo.Labels)
+	labels := container.ParseLabels(containerInfo.Labels)
+	project := container.GetProjectFromLabels(labels)
+	worktree := container.GetWorktreeFromLabels(labels)
+	hostPath := container.GetHostPathFromLabels(labels)
+	launchCommand := container.GetLaunchCommandFromLabels(labels)
 
 	return &ContainerDetails{
 		Names:         containerInfo.Names,
@@ -756,29 +760,6 @@ func getContainerDetails(dockerClient *docker.Client, name string) (*ContainerDe
 		HostPath:      hostPath,
 		LaunchCommand: launchCommand,
 	}, nil
-}
-
-// parseLabelsFromString parses Docker labels string format
-func parseLabelsFromString(labels string) (project, worktree, hostPath, launchCommand string) {
-	// Labels format: "label1=value1,label2=value2"
-	pairs := strings.Split(labels, ",")
-	for _, pair := range pairs {
-		if equalIdx := strings.Index(pair, "="); equalIdx != -1 {
-			key := pair[:equalIdx]
-			value := pair[equalIdx+1:]
-			switch key {
-			case "packnplay-project":
-				project = value
-			case "packnplay-worktree":
-				worktree = value
-			case "packnplay-host-path":
-				hostPath = value
-			case "packnplay-launch-command":
-				launchCommand = value
-			}
-		}
-	}
-	return
 }
 
 // getContainerID gets the container ID by name

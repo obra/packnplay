@@ -6,6 +6,7 @@ import (
 	"os"
 	"text/tabwriter"
 
+	"github.com/obra/packnplay/pkg/container"
 	"github.com/obra/packnplay/pkg/docker"
 	"github.com/spf13/cobra"
 )
@@ -61,7 +62,11 @@ var listCmd = &cobra.Command{
 				}
 
 				// Parse labels with launch info support
-				project, worktree, hostPath, launchCommand := parseLabelsWithLaunchInfo(info.Labels)
+				labels := container.ParseLabels(info.Labels)
+				project := container.GetProjectFromLabels(labels)
+				worktree := container.GetWorktreeFromLabels(labels)
+				hostPath := container.GetHostPathFromLabels(labels)
+				launchCommand := container.GetLaunchCommandFromLabels(labels)
 
 				// Handle backward compatibility
 				if hostPath == "" {
@@ -99,7 +104,10 @@ var listCmd = &cobra.Command{
 				}
 
 				// Parse labels with launch info support
-				project, worktree, hostPath, _ := parseLabelsWithLaunchInfo(info.Labels)
+				labels := container.ParseLabels(info.Labels)
+				project := container.GetProjectFromLabels(labels)
+				worktree := container.GetWorktreeFromLabels(labels)
+				hostPath := container.GetHostPathFromLabels(labels)
 
 				// Handle backward compatibility
 				if hostPath == "" {
@@ -135,68 +143,6 @@ func splitLines(s string) []string {
 		lines = append(lines, s[start:])
 	}
 	return lines
-}
-
-func parseLabels(labels string) (project, worktree string) {
-	// Labels format: "label1=value1,label2=value2"
-	pairs := splitByComma(labels)
-	for _, pair := range pairs {
-		kv := splitByEquals(pair)
-		if len(kv) == 2 {
-			switch kv[0] {
-			case "packnplay-project":
-				project = kv[1]
-			case "packnplay-worktree":
-				worktree = kv[1]
-			}
-		}
-	}
-	return
-}
-
-func parseLabelsWithLaunchInfo(labels string) (project, worktree, hostPath, launchCommand string) {
-	// Labels format: "label1=value1,label2=value2"
-	pairs := splitByComma(labels)
-	for _, pair := range pairs {
-		kv := splitByEquals(pair)
-		if len(kv) == 2 {
-			switch kv[0] {
-			case "packnplay-project":
-				project = kv[1]
-			case "packnplay-worktree":
-				worktree = kv[1]
-			case "packnplay-host-path":
-				hostPath = kv[1]
-			case "packnplay-launch-command":
-				launchCommand = kv[1]
-			}
-		}
-	}
-	return
-}
-
-func splitByComma(s string) []string {
-	var parts []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == ',' {
-			parts = append(parts, s[start:i])
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		parts = append(parts, s[start:])
-	}
-	return parts
-}
-
-func splitByEquals(s string) []string {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '=' {
-			return []string{s[:i], s[i+1:]}
-		}
-	}
-	return []string{s}
 }
 
 func init() {
