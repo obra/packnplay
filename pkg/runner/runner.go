@@ -362,15 +362,6 @@ func Run(config *RunConfig) error {
 	agentMounts := mountBuilder.BuildAgentMounts()
 	args = append(args, agentMounts...)
 
-	// Mount .config/amp directory for Sourcegraph Amp CLI if it exists
-	ampConfigPath := filepath.Join(homeDir, ".config", "amp")
-	if fileExists(ampConfigPath) {
-		args = append(args, "-v", fmt.Sprintf("%s:/home/%s/.config/amp", ampConfigPath, devConfig.RemoteUser))
-		if config.Verbose {
-			fmt.Fprintf(os.Stderr, "Mounting amp config directory\n")
-		}
-	}
-
 	// If using a worktree, also mount the main repo's .git directory at its real path
 	// This allows the worktree's .git file (which contains gitdir: <path>) to resolve correctly
 	if mainRepoGitDir != "" {
