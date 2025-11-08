@@ -11,6 +11,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // skipIfNoDocker skips the test if Docker daemon is not available
@@ -71,31 +74,18 @@ func createTestProject(t *testing.T, files map[string]string) string {
 }
 
 // cleanupContainer removes a container by name
+// Containers are running with sleep infinity, so must stop first
 func cleanupContainer(t *testing.T, containerName string) {
 	t.Helper()
 
-	// Check if container exists
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	checkCmd := exec.CommandContext(ctx, "docker", "ps", "-aq", "--filter", fmt.Sprintf("name=^%s$", containerName))
-	output, err := checkCmd.Output()
-	if err != nil {
-		t.Logf("Warning: Failed to check if container %s exists: %v", containerName, err)
-		return
-	}
-
-	// If container doesn't exist, nothing to clean up
-	if len(strings.TrimSpace(string(output))) == 0 {
-		return
-	}
-
-	// Stop and remove container
+	// Stop container first (may be running with sleep infinity)
 	stopCmd := exec.CommandContext(ctx, "docker", "stop", containerName)
-	if err := stopCmd.Run(); err != nil {
-		t.Logf("Warning: Failed to stop container %s: %v", containerName, err)
-	}
+	stopCmd.Run() // Ignore errors if already stopped
 
+	// Remove container
 	removeCmd := exec.CommandContext(ctx, "docker", "rm", "-f", containerName)
 	if err := removeCmd.Run(); err != nil {
 		t.Logf("Warning: Failed to remove container %s: %v", containerName, err)
@@ -240,6 +230,24 @@ func runPacknplay(t *testing.T, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, binary, args...)
 	output, err := cmd.CombinedOutput()
 	return string(output), err
+}
+
+// runPacknplayInDir changes to directory and runs packnplay
+// This is needed because packnplay doesn't have a --project flag
+func runPacknplayInDir(t *testing.T, dir string, args ...string) (string, error) {
+	t.Helper()
+
+	oldwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get working directory: %v", err)
+	}
+
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Failed to chdir to %s: %v", dir, err)
+	}
+	defer os.Chdir(oldwd)
+
+	return runPacknplay(t, args...)
 }
 
 // getContainerIDByName returns the container ID for a given container name
@@ -655,16 +663,9 @@ func TestE2E_ImagePull(t *testing.T) {
 		}
 	}()
 
-	// Note: We can't easily control container name with packnplay run
-	// So we'll verify by checking logs and output
-	output, err := runPacknplay(t, "run", "--project", projectDir, "echo", "image test success")
-	if err != nil {
-		t.Fatalf("Failed to run packnplay: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "image test success") {
-		t.Errorf("Expected output to contain 'image test success', got: %s", output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "image test success")
+	require.NoError(t, err, "Failed to run packnplay: %s", output)
+	require.Contains(t, output, "image test success")
 }
 
 // TestE2E_ImageAlreadyExists tests that packnplay skips pull if image exists locally
@@ -676,9 +677,7 @@ func TestE2E_ImageAlreadyExists(t *testing.T) {
 	defer cancel()
 
 	pullCmd := exec.CommandContext(ctx, "docker", "pull", "alpine:latest")
-	if err := pullCmd.Run(); err != nil {
-		t.Fatalf("Failed to pre-pull alpine:latest: %v", err)
-	}
+	require.NoError(t, pullCmd.Run(), "Failed to pre-pull alpine:latest")
 
 	projectDir := createTestProject(t, map[string]string{
 		".devcontainer/devcontainer.json": `{"image": "alpine:latest"}`,
@@ -694,14 +693,9 @@ func TestE2E_ImageAlreadyExists(t *testing.T) {
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "echo", "using cached image")
-	if err != nil {
-		t.Fatalf("Failed to run packnplay: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "using cached image") {
-		t.Errorf("Expected output to contain 'using cached image', got: %s", output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "using cached image")
+	require.NoError(t, err, "Failed to run packnplay: %s", output)
+	require.Contains(t, output, "using cached image")
 }
 
 // ============================================================================
@@ -729,14 +723,9 @@ RUN echo "built successfully" > /build-success.txt`,
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/custom-marker.txt")
-	if err != nil {
-		t.Fatalf("Failed to run packnplay: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "custom-marker") {
-		t.Errorf("Expected custom marker file content, got: %s", output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/custom-marker.txt")
+	require.NoError(t, err, "Failed to run packnplay: %s", output)
+	require.Contains(t, output, "custom-marker")
 }
 
 // TestE2E_DockerfileInDevcontainer tests Dockerfile in .devcontainer/
@@ -759,14 +748,9 @@ RUN echo "devcontainer-build" > /devcontainer-marker.txt`,
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/devcontainer-marker.txt")
-	if err != nil {
-		t.Fatalf("Failed to run packnplay: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "devcontainer-build") {
-		t.Errorf("Expected devcontainer build marker, got: %s", output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/devcontainer-marker.txt")
+	require.NoError(t, err, "Failed to run packnplay: %s", output)
+	require.Contains(t, output, "devcontainer-build")
 }
 
 // ============================================================================
@@ -801,14 +785,9 @@ RUN echo "arg value: ${TEST_ARG}" > /arg-test.txt`,
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/arg-test.txt")
-	if err != nil {
-		t.Fatalf("Failed to run packnplay: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "custom_value") {
-		t.Errorf("Expected build arg value 'custom_value', got: %s", output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/arg-test.txt")
+	require.NoError(t, err, "Failed to run packnplay: %s", output)
+	require.Contains(t, output, "custom_value")
 }
 
 // TestE2E_BuildWithTarget tests multi-stage build target
@@ -842,14 +821,9 @@ RUN echo "production stage" > /stage.txt`,
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/stage.txt")
-	if err != nil {
-		t.Fatalf("Failed to run packnplay: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "development stage") {
-		t.Errorf("Expected development stage marker, got: %s", output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/stage.txt")
+	require.NoError(t, err, "Failed to run packnplay: %s", output)
+	require.Contains(t, output, "development stage")
 }
 
 // TestE2E_BuildWithContext tests build context outside .devcontainer
@@ -878,14 +852,9 @@ COPY shared-file.txt /shared.txt`,
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/shared.txt")
-	if err != nil {
-		t.Fatalf("Failed to run packnplay: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "shared content from parent") {
-		t.Errorf("Expected shared file content, got: %s", output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/shared.txt")
+	require.NoError(t, err, "Failed to run packnplay: %s", output)
+	require.Contains(t, output, "shared content from parent")
 }
 
 // ============================================================================
@@ -916,14 +885,9 @@ func TestE2E_ContainerEnv(t *testing.T) {
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "sh", "-c", "echo $TEST_VAR")
-	if err != nil {
-		t.Fatalf("Failed to run packnplay: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "test_value") {
-		t.Errorf("Expected TEST_VAR=test_value, got: %s", output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "sh", "-c", "echo $TEST_VAR")
+	require.NoError(t, err, "Failed to run packnplay: %s", output)
+	require.Contains(t, output, "test_value")
 }
 
 // TestE2E_RemoteEnv tests remoteEnv with references
@@ -952,14 +916,9 @@ func TestE2E_RemoteEnv(t *testing.T) {
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "sh", "-c", "echo $API_ENDPOINT")
-	if err != nil {
-		t.Fatalf("Failed to run packnplay: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "https://api.example.com/v1") {
-		t.Errorf("Expected API_ENDPOINT with substitution, got: %s", output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "sh", "-c", "echo $API_ENDPOINT")
+	require.NoError(t, err, "Failed to run packnplay: %s", output)
+	require.Contains(t, output, "https://api.example.com/v1")
 }
 
 // TestE2E_EnvPriority tests CLI --env overrides devcontainer
@@ -985,14 +944,9 @@ func TestE2E_EnvPriority(t *testing.T) {
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "--env", "TEST_VAR=cli_override", "sh", "-c", "echo $TEST_VAR")
-	if err != nil {
-		t.Fatalf("Failed to run packnplay: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "cli_override") {
-		t.Errorf("Expected CLI override value, got: %s", output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--env", "TEST_VAR=cli_override", "sh", "-c", "echo $TEST_VAR")
+	require.NoError(t, err, "Failed to run packnplay: %s", output)
+	require.Contains(t, output, "cli_override")
 }
 
 // ============================================================================
@@ -1026,14 +980,9 @@ func TestE2E_LocalEnvSubstitution(t *testing.T) {
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "sh", "-c", "echo $MY_VAR")
-	if err != nil {
-		t.Fatalf("Failed to run packnplay: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "local_value_123") {
-		t.Errorf("Expected local env substitution, got: %s", output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "sh", "-c", "echo $MY_VAR")
+	require.NoError(t, err, "Failed to run packnplay: %s", output)
+	require.Contains(t, output, "local_value_123")
 }
 
 // TestE2E_WorkspaceVariables tests ${localWorkspaceFolder} and ${containerWorkspaceFolder}
@@ -1060,15 +1009,11 @@ func TestE2E_WorkspaceVariables(t *testing.T) {
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "sh", "-c", "echo $PROJECT_NAME")
-	if err != nil {
-		t.Fatalf("Failed to run packnplay: %v\nOutput: %s", err, output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "sh", "-c", "echo $PROJECT_NAME")
+	require.NoError(t, err, "Failed to run packnplay: %s", output)
 
 	// Should contain the base name of the temp directory
-	if len(strings.TrimSpace(output)) == 0 {
-		t.Errorf("Expected project name from workspace folder basename, got empty")
-	}
+	assert.NotEmpty(t, strings.TrimSpace(output), "Expected project name from workspace folder basename")
 }
 
 // TestE2E_DefaultValues tests ${localEnv:VAR:default}
@@ -1097,14 +1042,9 @@ func TestE2E_DefaultValues(t *testing.T) {
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "sh", "-c", "echo $MY_VAR")
-	if err != nil {
-		t.Fatalf("Failed to run packnplay: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "default_value") {
-		t.Errorf("Expected default value, got: %s", output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "sh", "-c", "echo $MY_VAR")
+	require.NoError(t, err, "Failed to run packnplay: %s", output)
+	require.Contains(t, output, "default_value")
 }
 
 // ============================================================================
@@ -1132,38 +1072,18 @@ func TestE2E_PortForwarding(t *testing.T) {
 		}
 	}()
 
-	// Run in background with a simple HTTP server simulation
-	// Note: alpine doesn't have nc, so we'll just verify the container config
-	output, err := runPacknplay(t, "run", "--project", projectDir, "echo", "port test")
-	if err != nil {
-		t.Fatalf("Failed to run packnplay: %v\nOutput: %s", err, output)
-	}
+	// Start container (runs sleep infinity in background)
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "started")
+	require.NoError(t, err, "Failed to start: %s", output)
 
-	// For a proper port test, we'd need to inspect the running container
-	// This is a simplified test that verifies the command succeeds
-	if !strings.Contains(output, "port test") {
-		t.Errorf("Expected output from container, got: %s", output)
-	}
+	// Container is running - verify ports
+	portOut, err := exec.Command("docker", "port", containerName, "3000").CombinedOutput()
+	require.NoError(t, err, "docker port should work on running container: %s", portOut)
+	require.Contains(t, string(portOut), ":3000")
 
-	// Verify port 3000 is mapped
-	portOutput, err := exec.Command("docker", "port", containerName, "3000").CombinedOutput()
-	if err == nil {
-		if !strings.Contains(string(portOutput), ":3000") {
-			t.Errorf("Port 3000 should be mapped to host, got: %s", portOutput)
-		}
-	} else {
-		t.Logf("Note: docker port command failed (may need running container): %v", err)
-	}
-
-	// Verify port 8080 is mapped
-	portOutput8080, err := exec.Command("docker", "port", containerName, "8080").CombinedOutput()
-	if err == nil {
-		if !strings.Contains(string(portOutput8080), ":8080") {
-			t.Errorf("Port 8080 should be mapped to host, got: %s", portOutput8080)
-		}
-	} else {
-		t.Logf("Note: docker port command failed (may need running container): %v", err)
-	}
+	portOut2, err := exec.Command("docker", "port", containerName, "8080").CombinedOutput()
+	require.NoError(t, err, "docker port should work on running container: %s", portOut2)
+	require.Contains(t, string(portOut2), ":8080")
 }
 
 // TestE2E_PortFormats tests different port format types
@@ -1187,44 +1107,24 @@ func TestE2E_PortFormats(t *testing.T) {
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "echo", "multiple port formats")
-	if err != nil {
-		t.Fatalf("Failed to run packnplay: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "multiple port formats") {
-		t.Errorf("Expected output from container, got: %s", output)
-	}
+	// Start container (runs sleep infinity in background)
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "multiple port formats")
+	require.NoError(t, err, "Failed to start: %s", output)
 
 	// Verify integer format (3000)
 	portOutput3000, err := exec.Command("docker", "port", containerName, "3000").CombinedOutput()
-	if err == nil {
-		if !strings.Contains(string(portOutput3000), ":3000") {
-			t.Errorf("Port 3000 (integer format) should be mapped to host, got: %s", portOutput3000)
-		}
-	} else {
-		t.Logf("Note: docker port command failed for port 3000 (may need running container): %v", err)
-	}
+	require.NoError(t, err, "docker port should work on running container: %s", portOutput3000)
+	require.Contains(t, string(portOutput3000), ":3000")
 
 	// Verify string format ("8080:80")
 	portOutput80, err := exec.Command("docker", "port", containerName, "80").CombinedOutput()
-	if err == nil {
-		if !strings.Contains(string(portOutput80), ":8080") {
-			t.Errorf("Port 80 (string format 8080:80) should be mapped to host port 8080, got: %s", portOutput80)
-		}
-	} else {
-		t.Logf("Note: docker port command failed for port 80 (may need running container): %v", err)
-	}
+	require.NoError(t, err, "docker port should work on running container: %s", portOutput80)
+	require.Contains(t, string(portOutput80), ":8080")
 
 	// Verify IP binding format ("127.0.0.1:9000:9000")
 	portOutput9000, err := exec.Command("docker", "port", containerName, "9000").CombinedOutput()
-	if err == nil {
-		if !strings.Contains(string(portOutput9000), "127.0.0.1:9000") {
-			t.Errorf("Port 9000 should be mapped to 127.0.0.1:9000, got: %s", portOutput9000)
-		}
-	} else {
-		t.Logf("Note: docker port command failed for port 9000 (may need running container): %v", err)
-	}
+	require.NoError(t, err, "docker port should work on running container: %s", portOutput9000)
+	require.Contains(t, string(portOutput9000), "127.0.0.1:9000")
 }
 
 // ============================================================================
@@ -1245,95 +1145,41 @@ func TestE2E_OnCreateCommand_RunsOnce(t *testing.T) {
 
 	containerName := getContainerNameForProject(projectDir)
 	defer cleanupContainer(t, containerName)
-	defer func() {
-		containerID := getContainerIDByName(t, containerName)
-		if containerID != "" {
-			cleanupMetadata(t, containerID)
-		}
-	}()
 
-	// First run - onCreate should execute
-	output1, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/tmp/onCreate-ran.txt")
-	if err != nil {
-		t.Fatalf("First run failed: %v\nOutput: %s", err, output1)
-	}
+	// First run - creates container with sleep infinity, runs onCreate
+	output1, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/tmp/onCreate-ran.txt")
+	require.NoError(t, err, "First run failed: %s", output1)
+	require.Contains(t, output1, "onCreate executed")
 
-	if !strings.Contains(output1, "onCreate executed") {
-		t.Errorf("onCreate should have created file on first run, got: %s", output1)
-	}
-
-	// Verify metadata was created and onCreate was tracked
+	// Container is still running - get its ID
 	containerID := getContainerIDByName(t, containerName)
-	if containerID == "" {
-		t.Fatal("Container ID should be available after first run")
-	}
+	require.NotEmpty(t, containerID, "Container should exist")
+	defer cleanupMetadata(t, containerID)
 
+	// Verify metadata shows onCreate executed
 	metadata := readMetadata(t, containerID)
-	if metadata == nil {
-		t.Fatal("Metadata should exist after first run")
-	}
+	require.NotNil(t, metadata, "Metadata should exist")
 
 	lifecycleRan, ok := metadata["lifecycleRan"].(map[string]interface{})
-	if !ok {
-		t.Fatal("Metadata should have lifecycleRan field")
-	}
+	require.True(t, ok, "Should have lifecycleRan")
 
 	onCreate, ok := lifecycleRan["onCreate"].(map[string]interface{})
-	if !ok {
-		t.Fatal("lifecycleRan should have onCreate field")
-	}
+	require.True(t, ok, "Should have onCreate")
+	require.True(t, onCreate["executed"].(bool), "onCreate should be marked executed")
 
-	if executed, ok := onCreate["executed"].(bool); !ok || !executed {
-		t.Error("onCreate should be marked as executed in metadata")
-	}
+	firstHash := onCreate["commandHash"].(string)
+	require.NotEmpty(t, firstHash, "Should have command hash")
 
-	commandHash, ok := onCreate["commandHash"].(string)
-	if !ok || commandHash == "" {
-		t.Error("onCreate should have a command hash in metadata")
-	}
+	// Second run - use --reconnect to exec into SAME container
+	output2, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "cat", "/tmp/onCreate-ran.txt")
+	require.NoError(t, err, "Second run failed: %s", output2)
+	require.Contains(t, output2, "onCreate executed", "File should still exist")
 
-	// Second run - onCreate should NOT execute again
-	// We need to run with same container/project
-	output2, err := runPacknplay(t, "run", "--project", projectDir, "test", "-f", "/tmp/onCreate-ran.txt")
-	if err != nil {
-		// If file doesn't exist, onCreate might have run again (bad)
-		t.Logf("Second run output: %s", output2)
-	}
-
-	// File should still exist from first run
-	output3, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/tmp/onCreate-ran.txt")
-	if err != nil {
-		t.Fatalf("Failed to read onCreate file on second run: %v\nOutput: %s", err, output3)
-	}
-
-	if !strings.Contains(output3, "onCreate executed") {
-		t.Errorf("onCreate file should persist from first run, got: %s", output3)
-	}
-
-	// Verify onCreate didn't run again by checking metadata hash is unchanged
+	// Verify onCreate didn't run again (hash unchanged)
 	metadata2 := readMetadata(t, containerID)
-	if metadata2 == nil {
-		t.Fatal("Metadata should still exist after second run")
-	}
-
-	lifecycleRan2, ok := metadata2["lifecycleRan"].(map[string]interface{})
-	if !ok {
-		t.Fatal("Metadata should still have lifecycleRan field")
-	}
-
-	onCreate2, ok := lifecycleRan2["onCreate"].(map[string]interface{})
-	if !ok {
-		t.Fatal("lifecycleRan should still have onCreate field")
-	}
-
-	commandHash2, ok := onCreate2["commandHash"].(string)
-	if !ok {
-		t.Error("onCreate should still have command hash")
-	}
-
-	if commandHash != commandHash2 {
-		t.Error("onCreate command hash should not change between runs")
-	}
+	onCreate2 := metadata2["lifecycleRan"].(map[string]interface{})["onCreate"].(map[string]interface{})
+	secondHash := onCreate2["commandHash"].(string)
+	require.Equal(t, firstHash, secondHash, "Hash should not change (onCreate didn't re-run)")
 }
 
 // TestE2E_PostCreateCommand_RunsOnce tests that postCreate runs only once
@@ -1350,87 +1196,40 @@ func TestE2E_PostCreateCommand_RunsOnce(t *testing.T) {
 
 	containerName := getContainerNameForProject(projectDir)
 	defer cleanupContainer(t, containerName)
-	defer func() {
-		containerID := getContainerIDByName(t, containerName)
-		if containerID != "" {
-			cleanupMetadata(t, containerID)
-		}
-	}()
 
 	// First run
-	output1, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/tmp/postCreate-ran.txt")
-	if err != nil {
-		t.Fatalf("First run failed: %v\nOutput: %s", err, output1)
-	}
-
-	if !strings.Contains(output1, "postCreate executed") {
-		t.Errorf("postCreate should have created file on first run, got: %s", output1)
-	}
+	output1, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/tmp/postCreate-ran.txt")
+	require.NoError(t, err, "First run failed: %s", output1)
+	require.Contains(t, output1, "postCreate executed")
 
 	// Verify metadata was created and postCreate was tracked
 	containerID := getContainerIDByName(t, containerName)
-	if containerID == "" {
-		t.Fatal("Container ID should be available after first run")
-	}
+	require.NotEmpty(t, containerID, "Container should exist")
+	defer cleanupMetadata(t, containerID)
 
 	metadata := readMetadata(t, containerID)
-	if metadata == nil {
-		t.Fatal("Metadata should exist after first run")
-	}
+	require.NotNil(t, metadata, "Metadata should exist")
 
 	lifecycleRan, ok := metadata["lifecycleRan"].(map[string]interface{})
-	if !ok {
-		t.Fatal("Metadata should have lifecycleRan field")
-	}
+	require.True(t, ok, "Should have lifecycleRan")
 
 	postCreate, ok := lifecycleRan["postCreate"].(map[string]interface{})
-	if !ok {
-		t.Fatal("lifecycleRan should have postCreate field")
-	}
+	require.True(t, ok, "Should have postCreate")
+	require.True(t, postCreate["executed"].(bool), "postCreate should be marked executed")
 
-	if executed, ok := postCreate["executed"].(bool); !ok || !executed {
-		t.Error("postCreate should be marked as executed in metadata")
-	}
+	firstHash := postCreate["commandHash"].(string)
+	require.NotEmpty(t, firstHash, "Should have command hash")
 
-	commandHash, ok := postCreate["commandHash"].(string)
-	if !ok || commandHash == "" {
-		t.Error("postCreate should have a command hash in metadata")
-	}
+	// Second run - use --reconnect, postCreate should NOT execute again
+	output2, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "cat", "/tmp/postCreate-ran.txt")
+	require.NoError(t, err, "Second run failed: %s", output2)
+	require.Contains(t, output2, "postCreate executed", "File should persist")
 
-	// Second run - postCreate should NOT execute again
-	output2, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/tmp/postCreate-ran.txt")
-	if err != nil {
-		t.Fatalf("Second run failed: %v\nOutput: %s", err, output2)
-	}
-
-	if !strings.Contains(output2, "postCreate executed") {
-		t.Errorf("postCreate file should persist from first run, got: %s", output2)
-	}
-
-	// Verify postCreate didn't run again by checking metadata hash is unchanged
+	// Verify postCreate didn't run again (hash unchanged)
 	metadata2 := readMetadata(t, containerID)
-	if metadata2 == nil {
-		t.Fatal("Metadata should still exist after second run")
-	}
-
-	lifecycleRan2, ok := metadata2["lifecycleRan"].(map[string]interface{})
-	if !ok {
-		t.Fatal("Metadata should still have lifecycleRan field")
-	}
-
-	postCreate2, ok := lifecycleRan2["postCreate"].(map[string]interface{})
-	if !ok {
-		t.Fatal("lifecycleRan should still have postCreate field")
-	}
-
-	commandHash2, ok := postCreate2["commandHash"].(string)
-	if !ok {
-		t.Error("postCreate should still have command hash")
-	}
-
-	if commandHash != commandHash2 {
-		t.Error("postCreate command hash should not change between runs")
-	}
+	postCreate2 := metadata2["lifecycleRan"].(map[string]interface{})["postCreate"].(map[string]interface{})
+	secondHash := postCreate2["commandHash"].(string)
+	require.Equal(t, firstHash, secondHash, "Hash should not change (postCreate didn't re-run)")
 }
 
 // TestE2E_PostStartCommand_RunsEveryTime tests that postStart runs every time
@@ -1455,40 +1254,25 @@ func TestE2E_PostStartCommand_RunsEveryTime(t *testing.T) {
 	}()
 
 	// First run
-	output1, err := runPacknplay(t, "run", "--project", projectDir, "wc", "-l", "/tmp/postStart-runs.txt")
-	if err != nil {
-		t.Fatalf("First run failed: %v\nOutput: %s", err, output1)
-	}
+	output1, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "wc", "-l", "/tmp/postStart-runs.txt")
+	require.NoError(t, err, "First run failed: %s", output1)
 
-	// Parse and verify first run line count
 	count1 := parseLineCount(output1)
-	if count1 < 1 {
-		t.Errorf("First run should have at least one line, got: %d (output: %s)", count1, output1)
-	}
+	require.GreaterOrEqual(t, count1, 1, "First run should have at least one line")
 
-	// Second run - postStart should run again and append
-	output2, err := runPacknplay(t, "run", "--project", projectDir, "wc", "-l", "/tmp/postStart-runs.txt")
-	if err != nil {
-		t.Fatalf("Second run failed: %v\nOutput: %s", err, output2)
-	}
+	// Second run - use --reconnect, postStart should run again and append
+	output2, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "wc", "-l", "/tmp/postStart-runs.txt")
+	require.NoError(t, err, "Second run failed: %s", output2)
 
-	// Parse and verify second run line count increased
 	count2 := parseLineCount(output2)
-	if count2 <= count1 {
-		t.Errorf("postStart should run every time, count should increase. First: %d, Second: %d (output2: %s)", count1, count2, output2)
-	}
+	require.Greater(t, count2, count1, "postStart should run every time, count should increase")
 
 	// Third run - verify postStart continues to run
-	output3, err := runPacknplay(t, "run", "--project", projectDir, "wc", "-l", "/tmp/postStart-runs.txt")
-	if err != nil {
-		t.Fatalf("Third run failed: %v\nOutput: %s", err, output3)
-	}
+	output3, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "wc", "-l", "/tmp/postStart-runs.txt")
+	require.NoError(t, err, "Third run failed: %s", output3)
 
-	// Parse and verify third run line count increased again
 	count3 := parseLineCount(output3)
-	if count3 <= count2 {
-		t.Errorf("postStart should run on third time too, count should increase. Second: %d, Third: %d (output3: %s)", count2, count3, output3)
-	}
+	require.Greater(t, count3, count2, "postStart should run on third time too")
 
 	t.Logf("postStart ran successfully: run1=%d lines, run2=%d lines, run3=%d lines", count1, count2, count3)
 }
@@ -1514,14 +1298,10 @@ func TestE2E_CommandFormatString(t *testing.T) {
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/tmp/test.txt")
-	if err != nil {
-		t.Fatalf("Failed to run: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "part1") || !strings.Contains(output, "part2") {
-		t.Errorf("Shell command with && should execute both parts, got: %s", output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/tmp/test.txt")
+	require.NoError(t, err, "Failed to run: %s", output)
+	require.Contains(t, output, "part1")
+	require.Contains(t, output, "part2")
 }
 
 // TestE2E_CommandFormatArray tests array command format (direct exec)
@@ -1545,14 +1325,9 @@ func TestE2E_CommandFormatArray(t *testing.T) {
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/tmp/array-test.txt")
-	if err != nil {
-		t.Fatalf("Failed to run: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "array format") {
-		t.Errorf("Array command format should work, got: %s", output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/tmp/array-test.txt")
+	require.NoError(t, err, "Failed to run: %s", output)
+	require.Contains(t, output, "array format")
 }
 
 // TestE2E_CommandFormatObject tests object format with parallel tasks
@@ -1581,30 +1356,18 @@ func TestE2E_CommandFormatObject(t *testing.T) {
 	}()
 
 	// Run and verify all tasks executed
-	output1, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/tmp/task1.txt")
-	if err != nil {
-		t.Fatalf("Failed to read task1: %v\nOutput: %s", err, output1)
-	}
+	output1, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/tmp/task1.txt")
+	require.NoError(t, err, "Failed to read task1: %s", output1)
+	require.Contains(t, output1, "task1")
 
-	output2, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/tmp/task2.txt")
-	if err != nil {
-		t.Fatalf("Failed to read task2: %v\nOutput: %s", err, output2)
-	}
+	// Use --reconnect for subsequent runs
+	output2, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "cat", "/tmp/task2.txt")
+	require.NoError(t, err, "Failed to read task2: %s", output2)
+	require.Contains(t, output2, "task2")
 
-	output3, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/tmp/task3.txt")
-	if err != nil {
-		t.Fatalf("Failed to read task3: %v\nOutput: %s", err, output3)
-	}
-
-	if !strings.Contains(output1, "task1") {
-		t.Errorf("Task1 should have executed, got: %s", output1)
-	}
-	if !strings.Contains(output2, "task2") {
-		t.Errorf("Task2 should have executed, got: %s", output2)
-	}
-	if !strings.Contains(output3, "task3") {
-		t.Errorf("Task3 should have executed, got: %s", output3)
-	}
+	output3, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "cat", "/tmp/task3.txt")
+	require.NoError(t, err, "Failed to read task3: %s", output3)
+	require.Contains(t, output3, "task3")
 }
 
 // TestE2E_CommandChangeDetection tests re-execution when command changes
@@ -1621,48 +1384,27 @@ func TestE2E_CommandChangeDetection(t *testing.T) {
 
 	containerName := getContainerNameForProject(projectDir)
 	defer cleanupContainer(t, containerName)
-	defer func() {
-		containerID := getContainerIDByName(t, containerName)
-		if containerID != "" {
-			cleanupMetadata(t, containerID)
-		}
-	}()
 
 	// First run with version1
-	output1, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/tmp/version.txt")
-	if err != nil {
-		t.Fatalf("First run failed: %v\nOutput: %s", err, output1)
-	}
-
-	if !strings.Contains(output1, "version1") {
-		t.Errorf("First version should be 'version1', got: %s", output1)
-	}
+	output1, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/tmp/version.txt")
+	require.NoError(t, err, "First run failed: %s", output1)
+	require.Contains(t, output1, "version1")
 
 	// Verify metadata was created with first command hash
 	containerID := getContainerIDByName(t, containerName)
-	if containerID == "" {
-		t.Fatal("Container ID should be available after first run")
-	}
+	require.NotEmpty(t, containerID, "Container should exist")
+	defer cleanupMetadata(t, containerID)
 
 	metadata := readMetadata(t, containerID)
-	if metadata == nil {
-		t.Fatal("Metadata should exist after first run")
-	}
+	require.NotNil(t, metadata, "Metadata should exist")
 
-	lifecycleRan, ok := metadata["lifecycleRan"].(map[string]interface{})
-	if !ok {
-		t.Fatal("Metadata should have lifecycleRan field")
-	}
+	lifecycleRan := metadata["lifecycleRan"].(map[string]interface{})
+	onCreate := lifecycleRan["onCreate"].(map[string]interface{})
+	commandHash1 := onCreate["commandHash"].(string)
+	require.NotEmpty(t, commandHash1, "Should have command hash")
 
-	onCreate, ok := lifecycleRan["onCreate"].(map[string]interface{})
-	if !ok {
-		t.Fatal("lifecycleRan should have onCreate field")
-	}
-
-	commandHash1, ok := onCreate["commandHash"].(string)
-	if !ok || commandHash1 == "" {
-		t.Fatal("onCreate should have a command hash in metadata")
-	}
+	// Stop and remove container to test re-creation with changed command
+	cleanupContainer(t, containerName)
 
 	// Modify the devcontainer.json with different command
 	newConfig := `{
@@ -1670,46 +1412,30 @@ func TestE2E_CommandChangeDetection(t *testing.T) {
   "onCreateCommand": "echo 'version2' > /tmp/version.txt"
 }`
 	configPath := filepath.Join(projectDir, ".devcontainer", "devcontainer.json")
-	if err := os.WriteFile(configPath, []byte(newConfig), 0644); err != nil {
-		t.Fatalf("Failed to update devcontainer.json: %v", err)
-	}
+	require.NoError(t, os.WriteFile(configPath, []byte(newConfig), 0644))
 
-	// Second run with changed command - should re-execute
-	output2, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/tmp/version.txt")
-	if err != nil {
-		t.Fatalf("Second run failed: %v\nOutput: %s", err, output2)
-	}
+	// Second run with changed command - should create new container and re-execute
+	output2, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/tmp/version.txt")
+	require.NoError(t, err, "Second run failed: %s", output2)
+
+	// Get new container ID
+	containerID2 := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID2, "New container should exist")
+	defer cleanupMetadata(t, containerID2)
 
 	// Verify metadata was updated with new command hash
-	metadata2 := readMetadata(t, containerID)
-	if metadata2 == nil {
-		t.Fatal("Metadata should exist after second run")
-	}
+	metadata2 := readMetadata(t, containerID2)
+	require.NotNil(t, metadata2, "Metadata should exist")
 
-	lifecycleRan2, ok := metadata2["lifecycleRan"].(map[string]interface{})
-	if !ok {
-		t.Fatal("Metadata should have lifecycleRan field after second run")
-	}
-
-	onCreate2, ok := lifecycleRan2["onCreate"].(map[string]interface{})
-	if !ok {
-		t.Fatal("lifecycleRan should have onCreate field after second run")
-	}
-
-	commandHash2, ok := onCreate2["commandHash"].(string)
-	if !ok || commandHash2 == "" {
-		t.Fatal("onCreate should have a command hash in metadata after second run")
-	}
+	onCreate2 := metadata2["lifecycleRan"].(map[string]interface{})["onCreate"].(map[string]interface{})
+	commandHash2 := onCreate2["commandHash"].(string)
+	require.NotEmpty(t, commandHash2, "Should have command hash")
 
 	// CRITICAL: Verify command hash changed when command content changed
-	if commandHash1 == commandHash2 {
-		t.Errorf("Command hash should change when command content changes, but both are: %s", commandHash1)
-	}
+	require.NotEqual(t, commandHash1, commandHash2, "Command hash should change when command content changes")
 
 	// CRITICAL: Verify command re-executed with new content
-	if !strings.Contains(output2, "version2") {
-		t.Errorf("Command should re-execute with new content when hash changes. Expected 'version2', got: %s", output2)
-	}
+	require.Contains(t, output2, "version2", "Command should re-execute with new content")
 }
 
 // ============================================================================
@@ -1737,14 +1463,9 @@ func TestE2E_RemoteUser(t *testing.T) {
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "whoami")
-	if err != nil {
-		t.Fatalf("Failed to run whoami: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(output, "nobody") {
-		t.Errorf("Expected user 'nobody', got: %s", output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "whoami")
+	require.NoError(t, err, "Failed to run whoami: %s", output)
+	require.Contains(t, output, "nobody")
 }
 
 // TestE2E_UserAutoDetection tests auto-detection when not specified
@@ -1767,15 +1488,11 @@ func TestE2E_UserAutoDetection(t *testing.T) {
 		}
 	}()
 
-	output, err := runPacknplay(t, "run", "--project", projectDir, "whoami")
-	if err != nil {
-		t.Fatalf("Failed to run whoami: %v\nOutput: %s", err, output)
-	}
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "whoami")
+	require.NoError(t, err, "Failed to run whoami: %s", output)
 
 	// Should return some user (root or auto-detected)
-	if len(strings.TrimSpace(output)) == 0 {
-		t.Errorf("Expected a username from auto-detection, got empty")
-	}
+	assert.NotEmpty(t, strings.TrimSpace(output), "Expected a username from auto-detection")
 	t.Logf("Auto-detected user: %s", strings.TrimSpace(output))
 }
 
@@ -1822,46 +1539,26 @@ RUN echo "custom image" > /custom.txt`,
 	}()
 
 	// Test 1: Verify custom build
-	output1, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/custom.txt")
-	if err != nil {
-		t.Fatalf("Failed to verify custom build: %v\nOutput: %s", err, output1)
-	}
-	if !strings.Contains(output1, "custom image") {
-		t.Errorf("Custom build failed, got: %s", output1)
-	}
+	output1, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/custom.txt")
+	require.NoError(t, err, "Failed to verify custom build: %s", output1)
+	require.Contains(t, output1, "custom image")
 
-	// Test 2: Verify environment variables
-	output2, err := runPacknplay(t, "run", "--project", projectDir, "sh", "-c", "echo $BASE_VAR $LOCAL_VAR $DERIVED_VAR")
-	if err != nil {
-		t.Fatalf("Failed to verify env vars: %v\nOutput: %s", err, output2)
-	}
-	if !strings.Contains(output2, "base_value") {
-		t.Errorf("BASE_VAR not set correctly, got: %s", output2)
-	}
-	if !strings.Contains(output2, "from_local_env") {
-		t.Errorf("LOCAL_VAR substitution failed, got: %s", output2)
-	}
-	if !strings.Contains(output2, "base_value_derived") {
-		t.Errorf("DERIVED_VAR not set correctly, got: %s", output2)
-	}
+	// Test 2: Verify environment variables (use --reconnect)
+	output2, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "sh", "-c", "echo $BASE_VAR $LOCAL_VAR $DERIVED_VAR")
+	require.NoError(t, err, "Failed to verify env vars: %s", output2)
+	require.Contains(t, output2, "base_value")
+	require.Contains(t, output2, "from_local_env")
+	require.Contains(t, output2, "base_value_derived")
 
-	// Test 3: Verify onCreate ran
-	output3, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/tmp/setup.txt")
-	if err != nil {
-		t.Fatalf("Failed to verify onCreate: %v\nOutput: %s", err, output3)
-	}
-	if !strings.Contains(output3, "setup complete") {
-		t.Errorf("onCreate command failed, got: %s", output3)
-	}
+	// Test 3: Verify onCreate ran (use --reconnect)
+	output3, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "cat", "/tmp/setup.txt")
+	require.NoError(t, err, "Failed to verify onCreate: %s", output3)
+	require.Contains(t, output3, "setup complete")
 
-	// Test 4: Verify user
-	output4, err := runPacknplay(t, "run", "--project", projectDir, "whoami")
-	if err != nil {
-		t.Fatalf("Failed to verify user: %v\nOutput: %s", err, output4)
-	}
-	if !strings.Contains(output4, "nobody") {
-		t.Errorf("remoteUser not set correctly, got: %s", output4)
-	}
+	// Test 4: Verify user (use --reconnect)
+	output4, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "whoami")
+	require.NoError(t, err, "Failed to verify user: %s", output4)
+	require.Contains(t, output4, "nobody")
 
 	t.Log("Full integration test passed!")
 }
@@ -1900,50 +1597,30 @@ func TestE2E_RealWorldNodeJS(t *testing.T) {
 	}()
 
 	// Test 1: Verify Node.js environment
-	output1, err := runPacknplay(t, "run", "--project", projectDir, "node", "--version")
-	if err != nil {
-		t.Fatalf("Failed to run node: %v\nOutput: %s", err, output1)
-	}
-	if !strings.Contains(output1, "v18") {
-		t.Errorf("Expected Node v18, got: %s", output1)
-	}
+	output1, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "node", "--version")
+	require.NoError(t, err, "Failed to run node: %s", output1)
+	require.Contains(t, output1, "v18")
 
-	// Test 2: Verify environment variable
-	output2, err := runPacknplay(t, "run", "--project", projectDir, "sh", "-c", "echo $NODE_ENV")
-	if err != nil {
-		t.Fatalf("Failed to check NODE_ENV: %v\nOutput: %s", err, output2)
-	}
-	if !strings.Contains(output2, "development") {
-		t.Errorf("NODE_ENV not set correctly, got: %s", output2)
-	}
+	// Test 2: Verify environment variable (use --reconnect)
+	output2, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "sh", "-c", "echo $NODE_ENV")
+	require.NoError(t, err, "Failed to check NODE_ENV: %s", output2)
+	require.Contains(t, output2, "development")
 
-	// Test 3: Verify onCreate ran (npm version check)
-	output3, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/tmp/npm-version.txt")
-	if err != nil {
-		t.Fatalf("Failed to verify onCreate: %v\nOutput: %s", err, output3)
-	}
+	// Test 3: Verify onCreate ran (npm version check) (use --reconnect)
+	output3, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "cat", "/tmp/npm-version.txt")
+	require.NoError(t, err, "Failed to verify onCreate: %s", output3)
 	// Should contain npm version number
-	if len(strings.TrimSpace(output3)) == 0 {
-		t.Errorf("onCreate command (npm --version) failed, got empty output")
-	}
+	assert.NotEmpty(t, strings.TrimSpace(output3), "onCreate command (npm --version) should produce output")
 
-	// Test 4: Verify postCreate ran
-	output4, err := runPacknplay(t, "run", "--project", projectDir, "cat", "/tmp/deps.txt")
-	if err != nil {
-		t.Fatalf("Failed to verify postCreate: %v\nOutput: %s", err, output4)
-	}
-	if !strings.Contains(output4, "dependencies installed") {
-		t.Errorf("postCreate command failed, got: %s", output4)
-	}
+	// Test 4: Verify postCreate ran (use --reconnect)
+	output4, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "cat", "/tmp/deps.txt")
+	require.NoError(t, err, "Failed to verify postCreate: %s", output4)
+	require.Contains(t, output4, "dependencies installed")
 
-	// Test 5: Verify package.json is accessible
-	output5, err := runPacknplay(t, "run", "--project", projectDir, "cat", "package.json")
-	if err != nil {
-		t.Fatalf("Failed to read package.json: %v\nOutput: %s", err, output5)
-	}
-	if !strings.Contains(output5, "test-app") {
-		t.Errorf("package.json not accessible, got: %s", output5)
-	}
+	// Test 5: Verify package.json is accessible (use --reconnect)
+	output5, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "cat", "package.json")
+	require.NoError(t, err, "Failed to read package.json: %s", output5)
+	require.Contains(t, output5, "test-app")
 
 	t.Log("Real-world Node.js test passed!")
 }

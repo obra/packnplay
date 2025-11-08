@@ -90,11 +90,16 @@ All cleanup happens even if tests fail (using defer).
 If tests are interrupted, you can manually clean up:
 
 ```bash
-# Remove all test containers
-docker ps -aq --filter "label=managed-by=packnplay-e2e" | xargs -r docker rm -f
+# Remove all test containers (by name pattern)
+docker ps -aq --filter "name=packnplay-packnplay-e2e" | xargs -r docker stop
+docker ps -aq --filter "name=packnplay-packnplay-e2e" | xargs -r docker rm -f
 
-# Remove test metadata
-rm -rf ~/.local/share/packnplay/metadata/packnplay-e2e-*
+# Remove ALL packnplay metadata (WARNING: includes non-test metadata)
+rm -rf ~/.local/share/packnplay/metadata/
+
+# Or remove metadata for specific containers:
+# First get container ID: docker ps -a --filter "name=packnplay-packnplay-e2e"
+# Then: rm ~/.local/share/packnplay/metadata/<container-id>.json
 ```
 
 ## Test Coverage
