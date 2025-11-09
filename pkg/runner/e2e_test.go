@@ -74,21 +74,24 @@ func createTestProject(t *testing.T, files map[string]string) string {
 }
 
 // cleanupContainer removes a container by name
-// Containers are running with sleep infinity, so must stop first
+// Uses docker rm -f for fast, forceful removal (kills and removes in one step)
+// This is appropriate for test cleanup where graceful shutdown is not required
 func cleanupContainer(t *testing.T, containerName string) {
 	t.Helper()
 
+	// Use shorter timeout since we're using -f flag for immediate kill
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Stop container first (may be running with sleep infinity)
-	stopCmd := exec.CommandContext(ctx, "docker", "stop", containerName)
-	stopCmd.Run() // Ignore errors if already stopped
-
-	// Remove container
+	// Use docker rm -f to kill and remove in one operation
+	// This is much faster than docker stop (which waits up to 10s for SIGTERM)
+	// followed by docker rm. For test cleanup, graceful shutdown is not needed.
 	removeCmd := exec.CommandContext(ctx, "docker", "rm", "-f", containerName)
 	if err := removeCmd.Run(); err != nil {
-		t.Logf("Warning: Failed to remove container %s: %v", containerName, err)
+		// Only log if the error is not "no such container"
+		if !strings.Contains(err.Error(), "No such container") {
+			t.Logf("Warning: Failed to remove container %s: %v", containerName, err)
+		}
 	}
 }
 

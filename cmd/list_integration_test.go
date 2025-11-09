@@ -14,7 +14,11 @@ func TestListCommandIntegration(t *testing.T) {
 	labelStr := "managed-by=packnplay,packnplay-project=myproject,packnplay-worktree=feature-branch,packnplay-host-path=/Users/jesse/myproject,packnplay-launch-command=packnplay run --worktree feature-branch --env DEBUG=1 --git-creds --publish 8080:80 claude code"
 
 	// Test parsing
-	project, worktree, hostPath, launchCommand := parseLabelsWithLaunchInfo(labelStr)
+	labels := container.ParseLabels(labelStr)
+	project := container.GetProjectFromLabels(labels)
+	worktree := container.GetWorktreeFromLabels(labels)
+	hostPath := container.GetHostPathFromLabels(labels)
+	launchCommand := container.GetLaunchCommandFromLabels(labels)
 
 	if project != "myproject" {
 		t.Errorf("project = %v, want myproject", project)
@@ -55,7 +59,11 @@ func TestGenerateLabelsIntegration(t *testing.T) {
 	labelStr := "managed-by=packnplay,packnplay-project=testproject,packnplay-worktree=main,packnplay-host-path=/home/user/testproject,packnplay-launch-command=packnplay run --runtime docker --verbose --git-creds bash"
 
 	// Parse back
-	parsedProject, parsedWorktree, parsedHostPath, parsedLaunchCommand := parseLabelsWithLaunchInfo(labelStr)
+	parsedLabels := container.ParseLabels(labelStr)
+	parsedProject := container.GetProjectFromLabels(parsedLabels)
+	parsedWorktree := container.GetWorktreeFromLabels(parsedLabels)
+	parsedHostPath := container.GetHostPathFromLabels(parsedLabels)
+	parsedLaunchCommand := container.GetLaunchCommandFromLabels(parsedLabels)
 
 	if parsedProject != projectName {
 		t.Errorf("parsed project = %v, want %v", parsedProject, projectName)
@@ -79,7 +87,11 @@ func TestBackwardCompatibilityWithOldContainers(t *testing.T) {
 
 	oldLabelStr := "managed-by=packnplay,packnplay-project=oldproject,packnplay-worktree=legacy"
 
-	project, worktree, hostPath, launchCommand := parseLabelsWithLaunchInfo(oldLabelStr)
+	oldLabels := container.ParseLabels(oldLabelStr)
+	project := container.GetProjectFromLabels(oldLabels)
+	worktree := container.GetWorktreeFromLabels(oldLabels)
+	hostPath := container.GetHostPathFromLabels(oldLabels)
+	launchCommand := container.GetLaunchCommandFromLabels(oldLabels)
 
 	// Old labels should still work
 	if project != "oldproject" {

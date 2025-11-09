@@ -12,12 +12,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mattn/go-isatty"
 	"github.com/obra/packnplay/pkg/aws"
 	"github.com/obra/packnplay/pkg/config"
 	"github.com/obra/packnplay/pkg/container"
 	"github.com/obra/packnplay/pkg/devcontainer"
 	"github.com/obra/packnplay/pkg/docker"
 	"github.com/obra/packnplay/pkg/git"
+	"github.com/obra/packnplay/pkg/userdetect"
 )
 
 type RunConfig struct {
@@ -45,6 +47,15 @@ type ContainerDetails struct {
 	Worktree      string
 	HostPath      string
 	LaunchCommand string
+}
+
+// getTTYFlags returns appropriate TTY flags for docker commands
+// Returns either ["-it"] if we have a TTY, or ["-i"] if we don't
+func getTTYFlags() []string {
+	if isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd()) {
+		return []string{"-it"} // Interactive + TTY
+	}
+	return []string{"-i"} // Interactive only (no TTY)
 }
 
 func Run(config *RunConfig) error {
@@ -157,6 +168,25 @@ func Run(config *RunConfig) error {
 		return fmt.Errorf("failed to ensure image: %w", err)
 	}
 
+	// Step 5.5: Detect RemoteUser if not specified and we built from Dockerfile
+	// For built images, the image name is derived from project path
+	if devConfig.RemoteUser == "" && devConfig.HasDockerfile() {
+		builtImageName := fmt.Sprintf("packnplay-%s-devcontainer:latest", strings.ToLower(filepath.Base(workDir)))
+		userResult, err := userdetect.DetectContainerUser(builtImageName, nil)
+		if err != nil {
+			// If detection fails, fall back to root
+			devConfig.RemoteUser = "root"
+			if config.Verbose {
+				fmt.Fprintf(os.Stderr, "Warning: failed to detect user from built image, using root: %v\n", err)
+			}
+		} else {
+			devConfig.RemoteUser = userResult.User
+			if config.Verbose {
+				fmt.Fprintf(os.Stderr, "Detected user %s from built image\n", devConfig.RemoteUser)
+			}
+		}
+	}
+
 	// Step 6: Generate container name and labels
 	projectName := filepath.Base(workDir)
 	containerName := container.GenerateContainerName(workDir, worktreeName)
@@ -256,13 +286,9 @@ func Run(config *RunConfig) error {
 		}
 
 		// Use host path as working directory
-		execArgs := []string{
-			filepath.Base(cmdPath),
-			"exec",
-			"-it",
-			"-w", workDir, // Use resolved host path
-			containerID,
-		}
+		execArgs := []string{filepath.Base(cmdPath), "exec"}
+		execArgs = append(execArgs, getTTYFlags()...)
+		execArgs = append(execArgs, "-w", workDir, containerID)
 		execArgs = append(execArgs, config.Command...)
 
 		return syscall.Exec(cmdPath, execArgs, os.Environ())
@@ -289,12 +315,14 @@ func Run(config *RunConfig) error {
 
 	// Build docker run command for background container
 	// Apple Container doesn't support -it with -d (detached mode)
+	// For detached containers, we don't need TTY flags since they run in background
 	isApple := currentUser.HomeDir != "" && !isLinux && dockerClient.Command() == "container"
 	var args []string
 	if isApple {
 		args = []string{"run", "-d"}
 	} else {
-		args = []string{"run", "-d", "-it"} // -d for detached, keep -it for interactive
+		// For standard Docker, detached mode doesn't need TTY flags
+		args = []string{"run", "-d"}
 	}
 
 	// Add labels
@@ -633,8 +661,9 @@ func Run(config *RunConfig) error {
 
 	// Add image
 	imageName := devConfig.Image
-	if devConfig.DockerFile != "" {
-		imageName = fmt.Sprintf("packnplay-%s-devcontainer:latest", projectName)
+	if devConfig.HasDockerfile() {
+		// Docker image names must be lowercase
+		imageName = fmt.Sprintf("packnplay-%s-devcontainer:latest", strings.ToLower(projectName))
 	}
 	args = append(args, imageName)
 
@@ -750,13 +779,9 @@ func Run(config *RunConfig) error {
 		return fmt.Errorf("failed to find docker command: %w", err)
 	}
 
-	execArgs := []string{
-		filepath.Base(cmdPath),
-		"exec",
-		"-it",
-		"-w", workingDir, // Now uses host path
-		containerID,
-	}
+	execArgs := []string{filepath.Base(cmdPath), "exec"}
+	execArgs = append(execArgs, getTTYFlags()...)
+	execArgs = append(execArgs, "-w", workingDir, containerID)
 	execArgs = append(execArgs, config.Command...)
 
 	// Use syscall.Exec to replace current process
@@ -953,12 +978,9 @@ func getWorkingDirectory(config *RunConfig) string {
 
 // generateExecArguments creates exec arguments with host path working directory
 func generateExecArguments(containerID string, command []string, workingDir string) []string {
-	args := []string{
-		"exec",
-		"-it",
-		"-w", workingDir, // Use host path, not /workspace
-		containerID,
-	}
+	args := []string{"exec"}
+	args = append(args, getTTYFlags()...)
+	args = append(args, "-w", workingDir, containerID)
 	args = append(args, command...)
 	return args
 }

@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"testing"
+
+	"github.com/obra/packnplay/pkg/container"
 )
 
 func TestParseLabels(t *testing.T) {
@@ -27,7 +29,9 @@ func TestParseLabels(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotProject, gotWorktree := parseLabels(tt.labels)
+			labels := container.ParseLabels(tt.labels)
+			gotProject := container.GetProjectFromLabels(labels)
+			gotWorktree := container.GetWorktreeFromLabels(labels)
 			if gotProject != tt.wantProject {
 				t.Errorf("parseLabels() project = %v, want %v", gotProject, tt.wantProject)
 			}
@@ -39,9 +43,13 @@ func TestParseLabels(t *testing.T) {
 }
 
 func TestParseLabelsWithLaunchInfo(t *testing.T) {
-	labels := "managed-by=packnplay,packnplay-project=myproject,packnplay-worktree=main,packnplay-host-path=/Users/jesse/myproject,packnplay-launch-command=packnplay run --worktree main --git-creds claude code"
+	labelString := "managed-by=packnplay,packnplay-project=myproject,packnplay-worktree=main,packnplay-host-path=/Users/jesse/myproject,packnplay-launch-command=packnplay run --worktree main --git-creds claude code"
 
-	project, worktree, hostPath, launchCommand := parseLabelsWithLaunchInfo(labels)
+	labels := container.ParseLabels(labelString)
+	project := container.GetProjectFromLabels(labels)
+	worktree := container.GetWorktreeFromLabels(labels)
+	hostPath := container.GetHostPathFromLabels(labels)
+	launchCommand := container.GetLaunchCommandFromLabels(labels)
 
 	if project != "myproject" {
 		t.Errorf("parseLabelsWithLaunchInfo() project = %v, want myproject", project)
@@ -63,9 +71,13 @@ func TestParseLabelsWithLaunchInfo(t *testing.T) {
 
 func TestParseLabelsWithLaunchInfoBackwardCompatibility(t *testing.T) {
 	// Test with old labels that don't have launch info
-	labels := "managed-by=packnplay,packnplay-project=myproject,packnplay-worktree=main"
+	labelString := "managed-by=packnplay,packnplay-project=myproject,packnplay-worktree=main"
 
-	project, worktree, hostPath, launchCommand := parseLabelsWithLaunchInfo(labels)
+	labels := container.ParseLabels(labelString)
+	project := container.GetProjectFromLabels(labels)
+	worktree := container.GetWorktreeFromLabels(labels)
+	hostPath := container.GetHostPathFromLabels(labels)
+	launchCommand := container.GetLaunchCommandFromLabels(labels)
 
 	if project != "myproject" {
 		t.Errorf("parseLabelsWithLaunchInfo() project = %v, want myproject", project)

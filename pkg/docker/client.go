@@ -13,8 +13,9 @@ import (
 
 // Client handles Docker CLI interactions
 type Client struct {
-	cmd     string
-	verbose bool
+	cmd                string
+	verbose            bool
+	supportsProgress   *bool // Cache for progress flag support
 }
 
 // NewClient creates a new Docker client
@@ -128,10 +129,31 @@ func (c *Client) Run(args ...string) (string, error) {
 	return string(output), err
 }
 
+// supportsProgressFlag checks if the Docker CLI supports the --progress flag
+func (c *Client) supportsProgressFlag() bool {
+	if c.supportsProgress != nil {
+		return *c.supportsProgress
+	}
+
+	// Check if docker pull supports --progress by checking help output
+	cmd := exec.Command(c.cmd, "pull", "--help")
+	output, err := cmd.Output()
+	if err != nil {
+		// If we can't check, assume no support
+		supports := false
+		c.supportsProgress = &supports
+		return false
+	}
+
+	supports := strings.Contains(string(output), "--progress")
+	c.supportsProgress = &supports
+	return supports
+}
+
 // RunWithProgress executes a docker command with real-time progress display
 func (c *Client) RunWithProgress(imageName string, args ...string) error {
-	// Add progress flag for operations that support it
-	if len(args) > 0 {
+	// Add progress flag for operations that support it, only if supported
+	if len(args) > 0 && c.supportsProgressFlag() {
 		switch args[0] {
 		case "pull":
 			// Docker pull supports JSON progress

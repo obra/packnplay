@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/obra/packnplay/pkg/devcontainer"
 )
@@ -85,7 +86,8 @@ func (im *ImageManager) pullImage(image string) error {
 // which injects secrets at runtime without persisting them in the image.
 func (im *ImageManager) buildImage(devConfig *devcontainer.Config, projectPath string) error {
 	projectName := filepath.Base(projectPath)
-	imageName := fmt.Sprintf("packnplay-%s-devcontainer:latest", projectName)
+	// Docker image names must be lowercase
+	imageName := fmt.Sprintf("packnplay-%s-devcontainer:latest", strings.ToLower(projectName))
 
 	// Check if already built
 	_, err := im.client.Run("image", "inspect", imageName)

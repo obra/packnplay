@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/mattn/go-isatty"
 	"github.com/obra/packnplay/pkg/container"
 	"github.com/obra/packnplay/pkg/docker"
 	"github.com/spf13/cobra"
@@ -17,6 +18,15 @@ var (
 	attachPath     string
 	attachWorktree string
 )
+
+// getTTYFlags returns appropriate TTY flags for docker commands
+// Returns either ["-it"] if we have a TTY, or ["-i"] if we don't
+func getTTYFlags() []string {
+	if isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd()) {
+		return []string{"-it"} // Interactive + TTY
+	}
+	return []string{"-i"} // Interactive only (no TTY)
+}
 
 var attachCmd = &cobra.Command{
 	Use:   "attach [flags]",
@@ -69,13 +79,9 @@ var attachCmd = &cobra.Command{
 			return fmt.Errorf("failed to find docker command: %w", err)
 		}
 
-		argv := []string{
-			filepath.Base(cmdPath),
-			"exec",
-			"-it",
-			containerName,
-			"/bin/bash",
-		}
+		argv := []string{filepath.Base(cmdPath), "exec"}
+		argv = append(argv, getTTYFlags()...)
+		argv = append(argv, containerName, "/bin/bash")
 
 		return syscall.Exec(cmdPath, argv, os.Environ())
 	},
