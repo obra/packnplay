@@ -695,6 +695,24 @@ func Run(config *RunConfig) error {
 		args = append(args, "-p", port)
 	}
 
+	// Add custom mounts from devcontainer.json
+	for _, mount := range devConfig.Mounts {
+		// Create substitution context for variable resolution
+		ctx := &devcontainer.SubstituteContext{
+			LocalWorkspaceFolder:     mountPath,
+			ContainerWorkspaceFolder: mountPath,
+			LocalEnv:                 getLocalEnvMap(),
+			ContainerEnv:             make(map[string]string),
+			Labels:                   labels,
+		}
+
+		// Apply variable substitution to mount string
+		substitutedMount := devcontainer.Substitute(ctx, mount).(string)
+
+		// Add as Docker mount flag
+		args = append(args, "--mount", substitutedMount)
+	}
+
 	// Add user from remoteUser setting
 	if devConfig.RemoteUser != "" {
 		args = append(args, "--user", devConfig.RemoteUser)
