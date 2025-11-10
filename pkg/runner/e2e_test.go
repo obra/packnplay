@@ -1848,3 +1848,37 @@ func TestE2E_RunArgsVariableSubstitution(t *testing.T) {
 	require.NoError(t, err, "Failed to inspect container labels")
 	require.Contains(t, string(labelOutput), filepath.Base(projectDir), "Variable substitution should work in runArgs")
 }
+
+// ============================================================================
+// Section 2.12: Error Handling and Edge Cases
+// ============================================================================
+
+// TestE2E_LifecycleCommandErrors tests error handling for failed lifecycle commands
+func TestE2E_LifecycleCommandErrors(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"postCreateCommand": "exit 1"
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Lifecycle command failure should not prevent container startup
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "container still works")
+	require.NoError(t, err, "Container should start despite lifecycle command failure: %s", output)
+	require.Contains(t, output, "container still works")
+
+	// But should log the warning
+	require.Contains(t, output, "postCreateCommand failed", "Should warn about lifecycle command failure")
+}
