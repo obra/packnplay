@@ -1688,3 +1688,81 @@ RUN echo "build options test" > /options-test.txt`,
 	require.NoError(t, err, "Failed to run with build options: %s", output)
 	require.Contains(t, output, "build options test")
 }
+
+// ============================================================================
+// Section 2.10: Custom Mounts Tests
+// ============================================================================
+
+// TestE2E_CustomMounts tests custom mount configurations
+func TestE2E_CustomMounts(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create test directory with content
+	testDataDir, err := os.MkdirTemp("", "packnplay-mount-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(testDataDir)
+
+	testFile := filepath.Join(testDataDir, "mounted-file.txt")
+	err = os.WriteFile(testFile, []byte("mount test content"), 0644)
+	require.NoError(t, err)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": fmt.Sprintf(`{
+			"image": "alpine:latest",
+			"mounts": [
+				"source=%s,target=/mounted-data,type=bind"
+			]
+		}`, testDataDir),
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/mounted-data/mounted-file.txt")
+	require.NoError(t, err, "Failed to access mounted file: %s", output)
+	require.Contains(t, output, "mount test content")
+}
+
+// TestE2E_MountVariableSubstitution tests variable substitution in mounts
+func TestE2E_MountVariableSubstitution(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"mounts": [
+				"source=${localWorkspaceFolder}/test-data,target=/workspace-data,type=bind"
+			]
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	// Create test data in project
+	testDataDir := filepath.Join(projectDir, "test-data")
+	err := os.MkdirAll(testDataDir, 0755)
+	require.NoError(t, err)
+
+	testFile := filepath.Join(testDataDir, "variable-test.txt")
+	err = os.WriteFile(testFile, []byte("variable substitution works"), 0644)
+	require.NoError(t, err)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/workspace-data/variable-test.txt")
+	require.NoError(t, err, "Failed to access mount with variable: %s", output)
+	require.Contains(t, output, "variable substitution works")
+}
