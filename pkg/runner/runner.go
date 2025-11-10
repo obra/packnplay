@@ -279,6 +279,36 @@ func Run(config *RunConfig) error {
 			return fmt.Errorf("failed to get container ID: %w", err)
 		}
 
+		// Run postStart command if defined (postStart runs every time container is accessed)
+		if devConfig.PostStartCommand != nil {
+			// Load metadata for lifecycle tracking
+			metadata, err := LoadMetadata(containerID)
+			if err != nil {
+				if config.Verbose {
+					fmt.Fprintf(os.Stderr, "Warning: failed to load metadata: %v\n", err)
+				}
+				metadata = nil
+			}
+
+			executor := NewLifecycleExecutor(dockerClient, containerID, devConfig.RemoteUser, config.Verbose, metadata)
+
+			if config.Verbose {
+				fmt.Fprintf(os.Stderr, "Running postStartCommand...\n")
+			}
+			if err := executor.Execute("postStart", devConfig.PostStartCommand); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: postStartCommand failed: %v\n", err)
+			}
+
+			// Save metadata after lifecycle execution
+			if metadata != nil {
+				if err := SaveMetadata(metadata); err != nil {
+					if config.Verbose {
+						fmt.Fprintf(os.Stderr, "Warning: failed to save metadata: %v\n", err)
+					}
+				}
+			}
+		}
+
 		// Exec into existing container
 		cmdPath, err := exec.LookPath(dockerClient.Command())
 		if err != nil {
@@ -288,6 +318,12 @@ func Run(config *RunConfig) error {
 		// Use host path as working directory
 		execArgs := []string{filepath.Base(cmdPath), "exec"}
 		execArgs = append(execArgs, getTTYFlags()...)
+
+		// Add user flag to exec if remoteUser is specified
+		if devConfig.RemoteUser != "" {
+			execArgs = append(execArgs, "--user", devConfig.RemoteUser)
+		}
+
 		execArgs = append(execArgs, "-w", workDir, containerID)
 		execArgs = append(execArgs, config.Command...)
 
@@ -659,6 +695,11 @@ func Run(config *RunConfig) error {
 		args = append(args, "-p", port)
 	}
 
+	// Add user from remoteUser setting
+	if devConfig.RemoteUser != "" {
+		args = append(args, "--user", devConfig.RemoteUser)
+	}
+
 	// Add image
 	imageName := devConfig.Image
 	if devConfig.HasDockerfile() {
@@ -781,6 +822,12 @@ func Run(config *RunConfig) error {
 
 	execArgs := []string{filepath.Base(cmdPath), "exec"}
 	execArgs = append(execArgs, getTTYFlags()...)
+
+	// Add user flag to exec if remoteUser is specified
+	if devConfig.RemoteUser != "" {
+		execArgs = append(execArgs, "--user", devConfig.RemoteUser)
+	}
+
 	execArgs = append(execArgs, "-w", workingDir, containerID)
 	execArgs = append(execArgs, config.Command...)
 
