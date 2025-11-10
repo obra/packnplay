@@ -26,3 +26,6 @@ vendor/
 *~
 test-branch/
 test-mount-feature/
+
+# Worktree directories
+.worktrees/
