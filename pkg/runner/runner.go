@@ -718,6 +718,24 @@ func Run(config *RunConfig) error {
 		args = append(args, "--user", devConfig.RemoteUser)
 	}
 
+	// Add custom Docker run arguments from devcontainer.json
+	for _, runArg := range devConfig.RunArgs {
+		// Create substitution context for variable resolution
+		ctx := &devcontainer.SubstituteContext{
+			LocalWorkspaceFolder:     mountPath,
+			ContainerWorkspaceFolder: mountPath,
+			LocalEnv:                 getLocalEnvMap(),
+			ContainerEnv:             make(map[string]string),
+			Labels:                   labels,
+		}
+
+		// Apply variable substitution to run argument
+		substitutedArg := devcontainer.Substitute(ctx, runArg).(string)
+
+		// Add to Docker run command
+		args = append(args, substitutedArg)
+	}
+
 	// Add image
 	imageName := devConfig.Image
 	if devConfig.HasDockerfile() {
