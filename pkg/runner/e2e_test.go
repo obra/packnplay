@@ -1628,3 +1628,63 @@ func TestE2E_RealWorldNodeJS(t *testing.T) {
 
 	t.Log("Real-world Node.js test passed!")
 }
+
+// TestE2E_BuildWithCacheFrom tests build cache functionality
+func TestE2E_BuildWithCacheFrom(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"build": {
+				"dockerfile": "Dockerfile",
+				"cacheFrom": ["alpine:latest"]
+			}
+		}`,
+		".devcontainer/Dockerfile": `FROM alpine:latest
+RUN echo "cached build test" > /cache-test.txt`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/cache-test.txt")
+	require.NoError(t, err, "Failed to run with cache: %s", output)
+	require.Contains(t, output, "cached build test")
+}
+
+// TestE2E_BuildWithOptions tests custom build options
+func TestE2E_BuildWithOptions(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"build": {
+				"dockerfile": "Dockerfile",
+				"options": ["--network=host"]
+			}
+		}`,
+		".devcontainer/Dockerfile": `FROM alpine:latest
+RUN echo "build options test" > /options-test.txt`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/options-test.txt")
+	require.NoError(t, err, "Failed to run with build options: %s", output)
+	require.Contains(t, output, "build options test")
+}
