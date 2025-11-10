@@ -233,9 +233,74 @@ Executed directly without shell, safer for complex arguments.
 ```
 Executes multiple commands in parallel. Values can be strings or arrays.
 
+### Custom Mounts
+
+#### `mounts`
+Additional volume mounts beyond the workspace mount.
+
+```json
+{
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
+    "source=my-volume,target=/data,type=volume",
+    "type=tmpfs,target=/tmp"
+  ]
+}
+```
+
+**Mount Syntax:**
+Uses Docker's `--mount` syntax (not `-v`):
+- `source=<host-path>,target=<container-path>,type=bind` - Bind mount
+- `source=<volume-name>,target=<container-path>,type=volume` - Named volume
+- `type=tmpfs,target=<container-path>` - Temporary filesystem
+
+**Variable Substitution:**
+Mount paths support variable substitution:
+```json
+{
+  "mounts": [
+    "source=${localWorkspaceFolder}/config,target=/app/config,type=bind"
+  ]
+}
+```
+
+**Common Use Cases:**
+- Docker socket access for Docker-in-Docker
+- Persistent data volumes
+- Configuration file sharing
+- Temporary high-performance storage (tmpfs)
+
+### Custom Run Arguments
+
+#### `runArgs`
+Additional Docker run arguments for container creation.
+
+```json
+{
+  "runArgs": ["--memory=2g", "--cpus=2", "--label", "env=dev"]
+}
+```
+
+**Common Use Cases:**
+- Resource limits: `--memory=2g`, `--cpus=2`
+- Custom labels: `--label key=value`
+- Security options: `--cap-add=SYS_PTRACE`
+- Network configuration: `--network=host`
+
+**Variable Substitution:**
+RunArgs support variable substitution:
+```json
+{
+  "runArgs": ["--label", "project=${containerWorkspaceFolderBasename}"]
+}
+```
+
+**Precedence:**
+runArgs are added before the image name in the `docker run` command, allowing you to pass any Docker CLI flags.
+
 ### Variable Substitution
 
-Use variable substitution in `containerEnv` and `remoteEnv` values.
+Use variable substitution in `containerEnv`, `remoteEnv`, `mounts`, and `runArgs` values.
 
 #### Supported Variables
 
@@ -325,6 +390,11 @@ All variables support default values: `${localEnv:VAR:default}`
     "PATH": "${containerEnv:PROJECT_ROOT}/node_modules/.bin:${containerEnv:PATH}"
   },
   "forwardPorts": [3000, 5432, 8080],
+  "mounts": [
+    "source=${localWorkspaceFolder}/config,target=/app/config,type=bind",
+    "type=tmpfs,target=/tmp"
+  ],
+  "runArgs": ["--memory=2g", "--cpus=2"],
   "onCreateCommand": {
     "install": "npm ci",
     "prepare": "npm run prepare"
@@ -470,17 +540,13 @@ packnplay focuses on **core devcontainer functionality for AI coding agents** wh
 
 ### Future Enhancements
 
-6. **`mounts`**: Additional volume mounts
-   - **Status**: May be implemented if users request
-   - **Alternative**: Use custom Dockerfile with VOLUME directives
-
-7. **Lifecycle command timeouts**: Commands don't timeout
+6. **Lifecycle command timeouts**: Commands don't timeout
    - **Status**: Future enhancement planned
    - **Alternative**: Use timeout command in shell: `timeout 60 npm install`
 
 ### Technical Limitations
 
-8. **Metadata per container**: Rebuilding image creates new container ID, new metadata
+7. **Metadata per container**: Rebuilding image creates new container ID, new metadata
    - **Impact**: Lifecycle commands re-run after rebuild
    - **Workaround**: None needed (expected behavior)
 
@@ -558,6 +624,43 @@ packnplay focuses on **core devcontainer functionality for AI coding agents** wh
 }
 ```
 
+### Docker-in-Docker Development
+
+```json
+{
+  "image": "docker:24-dind",
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+  "runArgs": ["--privileged"],
+  "containerEnv": {
+    "DOCKER_HOST": "unix:///var/run/docker.sock"
+  },
+  "postCreateCommand": "apk add --no-cache git bash",
+  "postStartCommand": "docker info"
+}
+```
+
+### Resource-Limited Testing Environment
+
+```json
+{
+  "image": "node:18-alpine",
+  "runArgs": [
+    "--memory=512m",
+    "--cpus=1",
+    "--label", "env=${localEnv:ENV:development}"
+  ],
+  "mounts": [
+    "type=tmpfs,target=/tmp,tmpfs-size=100000000"
+  ],
+  "containerEnv": {
+    "NODE_OPTIONS": "--max-old-space-size=384"
+  },
+  "postCreateCommand": "npm ci --prefer-offline"
+}
+```
+
 ## Comparison with VS Code Remote Containers
 
 Packnplay implements a **subset** of the devcontainer specification:
@@ -569,13 +672,14 @@ Packnplay implements a **subset** of the devcontainer specification:
 | `remoteUser` | ✅ | ✅ |
 | `containerEnv` / `remoteEnv` | ✅ | ✅ |
 | `forwardPorts` | ✅ | ✅ |
+| `mounts` | ✅ | ✅ |
+| `runArgs` | ✅ | ✅ |
 | `onCreateCommand` | ✅ | ✅ |
 | `postCreateCommand` | ✅ | ✅ |
 | `postStartCommand` | ✅ | ✅ |
 | Variable substitution | ✅ (subset) | ✅ (full) |
 | `features` | ❌ | ✅ |
 | `customizations` | ❌ | ✅ |
-| `mounts` | ❌ | ✅ |
 
 Packnplay focuses on **core devcontainer functionality** for AI coding agents while maintaining compatibility with the specification.
 
