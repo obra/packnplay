@@ -767,6 +767,7 @@ func TestE2E_BuildWithArgs(t *testing.T) {
 	projectDir := createTestProject(t, map[string]string{
 		".devcontainer/Dockerfile": `ARG TEST_ARG=default
 FROM alpine:latest
+ARG TEST_ARG
 RUN echo "arg value: ${TEST_ARG}" > /arg-test.txt`,
 		".devcontainer/devcontainer.json": `{
   "build": {
@@ -1061,7 +1062,7 @@ func TestE2E_PortForwarding(t *testing.T) {
 	projectDir := createTestProject(t, map[string]string{
 		".devcontainer/devcontainer.json": `{
   "image": "alpine:latest",
-  "forwardPorts": [3000, 8080]
+  "forwardPorts": [33001, 33002]
 }`,
 	})
 	defer os.RemoveAll(projectDir)
@@ -1080,13 +1081,13 @@ func TestE2E_PortForwarding(t *testing.T) {
 	require.NoError(t, err, "Failed to start: %s", output)
 
 	// Container is running - verify ports
-	portOut, err := exec.Command("docker", "port", containerName, "3000").CombinedOutput()
+	portOut, err := exec.Command("docker", "port", containerName, "33001").CombinedOutput()
 	require.NoError(t, err, "docker port should work on running container: %s", portOut)
-	require.Contains(t, string(portOut), ":3000")
+	require.Contains(t, string(portOut), ":33001")
 
-	portOut2, err := exec.Command("docker", "port", containerName, "8080").CombinedOutput()
+	portOut2, err := exec.Command("docker", "port", containerName, "33002").CombinedOutput()
 	require.NoError(t, err, "docker port should work on running container: %s", portOut2)
-	require.Contains(t, string(portOut2), ":8080")
+	require.Contains(t, string(portOut2), ":33002")
 }
 
 // TestE2E_PortFormats tests different port format types
@@ -1096,7 +1097,7 @@ func TestE2E_PortFormats(t *testing.T) {
 	projectDir := createTestProject(t, map[string]string{
 		".devcontainer/devcontainer.json": `{
   "image": "alpine:latest",
-  "forwardPorts": [3000, "8080:80", "127.0.0.1:9000:9000"]
+  "forwardPorts": [33003, "33004:33005", "127.0.0.1:33006:33006"]
 }`,
 	})
 	defer os.RemoveAll(projectDir)
@@ -1114,20 +1115,20 @@ func TestE2E_PortFormats(t *testing.T) {
 	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "multiple port formats")
 	require.NoError(t, err, "Failed to start: %s", output)
 
-	// Verify integer format (3000)
-	portOutput3000, err := exec.Command("docker", "port", containerName, "3000").CombinedOutput()
-	require.NoError(t, err, "docker port should work on running container: %s", portOutput3000)
-	require.Contains(t, string(portOutput3000), ":3000")
+	// Verify integer format (33003 -> 33003:33003)
+	portOutput33003, err := exec.Command("docker", "port", containerName, "33003").CombinedOutput()
+	require.NoError(t, err, "docker port should work on running container: %s", portOutput33003)
+	require.Contains(t, string(portOutput33003), ":33003")
 
-	// Verify string format ("8080:80")
-	portOutput80, err := exec.Command("docker", "port", containerName, "80").CombinedOutput()
-	require.NoError(t, err, "docker port should work on running container: %s", portOutput80)
-	require.Contains(t, string(portOutput80), ":8080")
+	// Verify string format ("33004:33005" means host:33004 -> container:33005)
+	portOutput33005, err := exec.Command("docker", "port", containerName, "33005").CombinedOutput()
+	require.NoError(t, err, "docker port should work on running container: %s", portOutput33005)
+	require.Contains(t, string(portOutput33005), ":33004")
 
-	// Verify IP binding format ("127.0.0.1:9000:9000")
-	portOutput9000, err := exec.Command("docker", "port", containerName, "9000").CombinedOutput()
-	require.NoError(t, err, "docker port should work on running container: %s", portOutput9000)
-	require.Contains(t, string(portOutput9000), "127.0.0.1:9000")
+	// Verify IP binding format ("127.0.0.1:33006:33006")
+	portOutput33006, err := exec.Command("docker", "port", containerName, "33006").CombinedOutput()
+	require.NoError(t, err, "docker port should work on running container: %s", portOutput33006)
+	require.Contains(t, string(portOutput33006), "127.0.0.1:33006")
 }
 
 // ============================================================================
@@ -1525,7 +1526,7 @@ RUN echo "custom image" > /custom.txt`,
   "remoteEnv": {
     "DERIVED_VAR": "${containerEnv:BASE_VAR}_derived"
   },
-  "forwardPorts": [3000],
+  "forwardPorts": [33007],
   "onCreateCommand": "echo 'setup complete' > /tmp/setup.txt",
   "remoteUser": "nobody"
 }`,
@@ -1583,7 +1584,7 @@ func TestE2E_RealWorldNodeJS(t *testing.T) {
   "containerEnv": {
     "NODE_ENV": "development"
   },
-  "forwardPorts": [3000],
+  "forwardPorts": [33008],
   "onCreateCommand": "npm --version > /tmp/npm-version.txt",
   "postCreateCommand": "echo 'dependencies installed' > /tmp/deps.txt"
 }`,
