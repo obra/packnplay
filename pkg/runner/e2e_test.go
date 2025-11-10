@@ -1766,3 +1766,85 @@ func TestE2E_MountVariableSubstitution(t *testing.T) {
 	require.NoError(t, err, "Failed to access mount with variable: %s", output)
 	require.Contains(t, output, "variable substitution works")
 }
+
+// ============================================================================
+// Section 2.11: Custom RunArgs Tests
+// ============================================================================
+
+// TestE2E_CustomRunArgs tests custom Docker run arguments
+func TestE2E_CustomRunArgs(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"runArgs": ["--memory=256m", "--cpus=1"]
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Verify container starts with resource limits
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "runargs test success")
+	require.NoError(t, err, "Failed to run with custom runArgs: %s", output)
+	require.Contains(t, output, "runargs test success")
+
+	// Verify memory limit was applied by inspecting container
+	containerID := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID, "Container ID should be found")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	inspectCmd := exec.CommandContext(ctx, "docker", "inspect", containerID, "--format", "{{.HostConfig.Memory}}")
+	memoryOutput, err := inspectCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to inspect container memory")
+
+	// Docker returns memory in bytes, 256m = 268435456 bytes
+	require.Contains(t, string(memoryOutput), "268435456", "Memory limit should be applied")
+}
+
+// TestE2E_RunArgsVariableSubstitution tests variable substitution in runArgs
+func TestE2E_RunArgsVariableSubstitution(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"runArgs": ["--label", "project=${containerWorkspaceFolderBasename}"]
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "variable runargs success")
+	require.NoError(t, err, "Failed to run with variable runArgs: %s", output)
+
+	// Verify label was applied with substituted variable
+	containerID := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	inspectCmd := exec.CommandContext(ctx, "docker", "inspect", containerID, "--format", "{{index .Config.Labels \"project\"}}")
+	labelOutput, err := inspectCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to inspect container labels")
+	require.Contains(t, string(labelOutput), filepath.Base(projectDir), "Variable substitution should work in runArgs")
+}
