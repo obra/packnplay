@@ -1,9 +1,13 @@
 package devcontainer
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLoadConfig(t *testing.T) {
@@ -70,5 +74,48 @@ func TestGetDefaultConfig(t *testing.T) {
 	// For ubuntu, should detect and use "root" as fallback since no better user found
 	if config.RemoteUser == "" {
 		t.Errorf("GetDefaultConfig(%v) RemoteUser should not be empty", ubuntuImage)
+	}
+}
+
+func TestConfig_MountsAndRunArgs(t *testing.T) {
+	tests := []struct {
+		name        string
+		json        string
+		wantMounts  []string
+		wantRunArgs []string
+	}{
+		{
+			name: "mounts and runArgs present",
+			json: `{
+				"image": "alpine:latest",
+				"mounts": [
+					"source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
+					"source=my-volume,target=/data,type=volume"
+				],
+				"runArgs": ["--memory=2g", "--cpus=2"]
+			}`,
+			wantMounts: []string{
+				"source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
+				"source=my-volume,target=/data,type=volume",
+			},
+			wantRunArgs: []string{"--memory=2g", "--cpus=2"},
+		},
+		{
+			name:        "mounts and runArgs absent",
+			json:        `{"image": "alpine:latest"}`,
+			wantMounts:  nil,
+			wantRunArgs: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var config Config
+			err := json.Unmarshal([]byte(tt.json), &config)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.wantMounts, config.Mounts)
+			assert.Equal(t, tt.wantRunArgs, config.RunArgs)
+		})
 	}
 }

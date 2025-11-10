@@ -17,6 +17,8 @@ type Config struct {
 	ContainerEnv map[string]string `json:"containerEnv,omitempty"`
 	RemoteEnv    map[string]string `json:"remoteEnv,omitempty"`
 	ForwardPorts []interface{}     `json:"forwardPorts,omitempty"` // int or string
+	Mounts       []string          `json:"mounts,omitempty"`       // Docker mount syntax
+	RunArgs      []string          `json:"runArgs,omitempty"`      // Additional docker run arguments
 
 	// Lifecycle commands
 	OnCreateCommand   *LifecycleCommand `json:"onCreateCommand,omitempty"`
