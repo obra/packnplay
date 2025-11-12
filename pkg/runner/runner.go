@@ -168,9 +168,9 @@ func Run(config *RunConfig) error {
 		return fmt.Errorf("failed to ensure image: %w", err)
 	}
 
-	// Step 5.5: Detect RemoteUser if not specified and we built from Dockerfile
+	// Step 5.5: Detect RemoteUser if not specified and we built from Dockerfile or features
 	// For built images, the image name is derived from project path
-	if devConfig.RemoteUser == "" && devConfig.HasDockerfile() {
+	if devConfig.RemoteUser == "" && (devConfig.HasDockerfile() || len(devConfig.Features) > 0) {
 		builtImageName := fmt.Sprintf("packnplay-%s-devcontainer:latest", strings.ToLower(filepath.Base(workDir)))
 		userResult, err := userdetect.DetectContainerUser(builtImageName, nil)
 		if err != nil {
@@ -738,7 +738,7 @@ func Run(config *RunConfig) error {
 
 	// Add image
 	imageName := devConfig.Image
-	if devConfig.HasDockerfile() {
+	if devConfig.HasDockerfile() || len(devConfig.Features) > 0 {
 		// Docker image names must be lowercase
 		imageName = fmt.Sprintf("packnplay-%s-devcontainer:latest", strings.ToLower(projectName))
 	}

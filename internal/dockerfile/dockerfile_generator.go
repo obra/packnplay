@@ -35,12 +35,31 @@ func (g *DockerfileGenerator) Generate(baseImage string, remoteUser string, feat
 			return "", fmt.Errorf("failed to read install script: %w", err)
 		}
 
-		// Add RUN command with the install script content
-		sb.WriteString(fmt.Sprintf("RUN %s\n\n", string(content)))
+		// Execute the install script using sh
+		// Note: We use sh -c to execute the script content directly
+		scriptStr := strings.ReplaceAll(string(content), `\`, `\\`)
+		scriptStr = strings.ReplaceAll(scriptStr, `"`, `\"`)
+		scriptStr = strings.ReplaceAll(scriptStr, "\n", " && ")
+
+		// Remove shebang if present
+		if strings.HasPrefix(scriptStr, "#!/") {
+			parts := strings.SplitN(scriptStr, " && ", 2)
+			if len(parts) > 1 {
+				scriptStr = parts[1]
+			}
+		}
+
+		// Remove trailing && if present
+		scriptStr = strings.TrimSuffix(strings.TrimSpace(scriptStr), "&&")
+		scriptStr = strings.TrimSpace(scriptStr)
+
+		sb.WriteString(fmt.Sprintf("RUN sh -c \"%s\"\n\n", scriptStr))
 	}
 
-	// Switch back to remote user
-	sb.WriteString(fmt.Sprintf("USER %s\n", remoteUser))
+	// Switch back to remote user if specified
+	if remoteUser != "" {
+		sb.WriteString(fmt.Sprintf("USER %s\n", remoteUser))
+	}
 
 	return sb.String(), nil
 }

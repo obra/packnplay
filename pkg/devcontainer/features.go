@@ -41,16 +41,26 @@ func NewFeatureResolver(cacheDir string) *FeatureResolver {
 
 // ResolveFeature resolves a local feature from the given path with the specified options
 func (r *FeatureResolver) ResolveFeature(featurePath string, options map[string]interface{}) (*ResolvedFeature, error) {
-	// Read metadata from devcontainer-feature.json
+	// Read metadata from devcontainer-feature.json if it exists
 	metadataPath := filepath.Join(featurePath, "devcontainer-feature.json")
 	metadataBytes, err := os.ReadFile(metadataPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read feature metadata: %w", err)
-	}
 
 	var metadata FeatureMetadata
-	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
-		return nil, fmt.Errorf("failed to parse feature metadata: %w", err)
+	if err == nil {
+		// Metadata file exists - parse it
+		if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+			return nil, fmt.Errorf("failed to parse feature metadata: %w", err)
+		}
+	} else if os.IsNotExist(err) {
+		// Metadata file doesn't exist - use minimal defaults for local features
+		// Use the directory name as the feature ID
+		metadata = FeatureMetadata{
+			ID:      filepath.Base(featurePath),
+			Version: "1.0.0",
+		}
+	} else {
+		// Some other error reading the file
+		return nil, fmt.Errorf("failed to read feature metadata: %w", err)
 	}
 
 	// Create resolved feature
@@ -73,13 +83,24 @@ func (r *FeatureResolver) ResolveFeatures(features map[string]*ResolvedFeature) 
 	for id, feature := range features {
 		metadataPath := filepath.Join(feature.InstallPath, "devcontainer-feature.json")
 		metadataBytes, err := os.ReadFile(metadataPath)
-		if err != nil {
+
+		var metadata FeatureMetadata
+		if err == nil {
+			// Metadata file exists - parse it
+			if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+				return nil, fmt.Errorf("failed to parse metadata for feature %s: %w", id, err)
+			}
+		} else if os.IsNotExist(err) {
+			// Metadata file doesn't exist - use minimal defaults
+			metadata = FeatureMetadata{
+				ID:      id,
+				Version: "1.0.0",
+			}
+		} else {
+			// Some other error reading the file
 			return nil, fmt.Errorf("failed to read metadata for feature %s: %w", id, err)
 		}
-		var metadata FeatureMetadata
-		if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
-			return nil, fmt.Errorf("failed to parse metadata for feature %s: %w", id, err)
-		}
+
 		featureMetadata[id] = &metadata
 		// Update the feature with dependency info
 		feature.DependsOn = metadata.DependsOn

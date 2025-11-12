@@ -1882,3 +1882,58 @@ func TestE2E_LifecycleCommandErrors(t *testing.T) {
 	// But should log the warning
 	require.Contains(t, output, "postCreateCommand failed", "Should warn about lifecycle command failure")
 }
+
+// ============================================================================
+// Section 2.13: Feature Integration Tests
+// ============================================================================
+
+// TestE2E_BasicFeatureIntegration tests basic local feature installation
+func TestE2E_BasicFeatureIntegration(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create a temp local feature directory with install.sh
+	featureDir, err := os.MkdirTemp("", "packnplay-feature-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(featureDir)
+
+	// Create install.sh that touches /test-feature-marker
+	installScript := `#!/bin/sh
+set -e
+touch /test-feature-marker
+echo "Feature installed successfully"
+`
+	installPath := filepath.Join(featureDir, "install.sh")
+	err = os.WriteFile(installPath, []byte(installScript), 0755)
+	require.NoError(t, err)
+
+	// Create devcontainer.json with features field pointing to temp feature
+	devcontainerJSON := fmt.Sprintf(`{
+		"image": "alpine:latest",
+		"features": {
+			"%s": {}
+		}
+	}`, featureDir)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": devcontainerJSON,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run packnplay and verify /test-feature-marker exists in container
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "test", "-f", "/test-feature-marker")
+	require.NoError(t, err, "Feature marker should exist in container: %s", output)
+
+	// Also verify we can read the marker file
+	output2, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "ls", "-la", "/test-feature-marker")
+	require.NoError(t, err, "Should be able to ls the feature marker: %s", output2)
+	require.Contains(t, output2, "test-feature-marker")
+}

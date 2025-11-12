@@ -171,7 +171,12 @@ func (im *ImageManager) buildWithFeatures(devConfig *devcontainer.Config, projec
 			optionsMap = map[string]interface{}{}
 		}
 
-		fullPath := filepath.Join(projectPath, ".devcontainer", featurePath)
+		// Use absolute path if provided, otherwise resolve relative to .devcontainer
+		fullPath := featurePath
+		if !filepath.IsAbs(featurePath) {
+			fullPath = filepath.Join(projectPath, ".devcontainer", featurePath)
+		}
+
 		feature, err := resolver.ResolveFeature(fullPath, optionsMap)
 		if err != nil {
 			return fmt.Errorf("failed to resolve feature %s: %w", featurePath, err)
