@@ -36,7 +36,7 @@ apt-get install -y curl
 
 	// Generate Dockerfile
 	generator := NewDockerfileGenerator()
-	dockerfile, err := generator.Generate("ubuntu:22.04", "vscode", []*devcontainer.ResolvedFeature{resolvedFeature})
+	dockerfile, err := generator.Generate("ubuntu:22.04", "vscode", []*devcontainer.ResolvedFeature{resolvedFeature}, tempDir)
 	if err != nil {
 		t.Fatalf("Generate failed: %v", err)
 	}
@@ -50,25 +50,39 @@ apt-get install -y curl
 		t.Errorf("Dockerfile missing USER root statement")
 	}
 
-	if !strings.Contains(dockerfile, "echo \"Installing test feature\"") {
-		t.Errorf("Dockerfile missing feature install commands")
+	// Verify COPY command for feature
+	if !strings.Contains(dockerfile, "COPY") {
+		t.Errorf("Dockerfile missing COPY command for feature")
+	}
+
+	// Verify RUN command to execute install.sh
+	if !strings.Contains(dockerfile, "RUN cd /tmp/devcontainer-features") {
+		t.Errorf("Dockerfile missing RUN command to execute feature install.sh")
+	}
+
+	if !strings.Contains(dockerfile, "./install.sh") {
+		t.Errorf("Dockerfile missing install.sh execution")
 	}
 
 	if !strings.Contains(dockerfile, "USER vscode") {
 		t.Errorf("Dockerfile missing USER vscode statement at end")
 	}
 
-	// Verify order: FROM before USER root before RUN before USER vscode
+	// Verify order: FROM before USER root before COPY before RUN before USER vscode
 	fromIdx := strings.Index(dockerfile, "FROM")
 	userRootIdx := strings.Index(dockerfile, "USER root")
+	copyIdx := strings.Index(dockerfile, "COPY")
 	runIdx := strings.Index(dockerfile, "RUN")
 	userVscodeIdx := strings.LastIndex(dockerfile, "USER vscode")
 
 	if fromIdx > userRootIdx {
 		t.Errorf("FROM should come before USER root")
 	}
-	if userRootIdx > runIdx {
-		t.Errorf("USER root should come before RUN")
+	if userRootIdx > copyIdx {
+		t.Errorf("USER root should come before COPY")
+	}
+	if copyIdx > runIdx {
+		t.Errorf("COPY should come before RUN")
 	}
 	if runIdx > userVscodeIdx {
 		t.Errorf("RUN should come before final USER statement")

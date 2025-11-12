@@ -13,6 +13,13 @@ func GenerateContainerName(projectPath, worktreeName string) string {
 	return fmt.Sprintf("packnplay-%s-%s", projectName, sanitizedWorktree)
 }
 
+// GenerateImageName creates an image name for a built devcontainer
+// Docker image names must be lowercase
+func GenerateImageName(projectPath string) string {
+	projectName := strings.ToLower(filepath.Base(projectPath))
+	return fmt.Sprintf("packnplay-%s-devcontainer:latest", projectName)
+}
+
 // sanitizeName converts a name to docker-compatible format
 func sanitizeName(name string) string {
 	// Docker container names: [a-zA-Z0-9][a-zA-Z0-9_.-]*

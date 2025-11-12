@@ -1891,31 +1891,23 @@ func TestE2E_LifecycleCommandErrors(t *testing.T) {
 func TestE2E_BasicFeatureIntegration(t *testing.T) {
 	skipIfNoDocker(t)
 
-	// Create a temp local feature directory with install.sh
-	featureDir, err := os.MkdirTemp("", "packnplay-feature-*")
-	require.NoError(t, err)
-	defer os.RemoveAll(featureDir)
-
 	// Create install.sh that touches /test-feature-marker
 	installScript := `#!/bin/sh
 set -e
 touch /test-feature-marker
 echo "Feature installed successfully"
 `
-	installPath := filepath.Join(featureDir, "install.sh")
-	err = os.WriteFile(installPath, []byte(installScript), 0755)
-	require.NoError(t, err)
 
-	// Create devcontainer.json with features field pointing to temp feature
-	devcontainerJSON := fmt.Sprintf(`{
-		"image": "alpine:latest",
-		"features": {
-			"%s": {}
-		}
-	}`, featureDir)
-
+	// Create project with feature inside .devcontainer/local-features/test-feature
+	// This ensures the feature is within the Docker build context
 	projectDir := createTestProject(t, map[string]string{
-		".devcontainer/devcontainer.json": devcontainerJSON,
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"features": {
+				"./local-features/test-feature": {}
+			}
+		}`,
+		".devcontainer/local-features/test-feature/install.sh": installScript,
 	})
 	defer os.RemoveAll(projectDir)
 

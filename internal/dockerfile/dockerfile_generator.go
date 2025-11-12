@@ -17,7 +17,8 @@ func NewDockerfileGenerator() *DockerfileGenerator {
 }
 
 // Generate creates a Dockerfile with the specified base image, remote user, and features
-func (g *DockerfileGenerator) Generate(baseImage string, remoteUser string, features []*devcontainer.ResolvedFeature) (string, error) {
+// The buildContextPath is the directory used as the Docker build context (typically .devcontainer)
+func (g *DockerfileGenerator) Generate(baseImage string, remoteUser string, features []*devcontainer.ResolvedFeature, buildContextPath string) (string, error) {
 	var sb strings.Builder
 
 	// FROM statement
@@ -29,16 +30,19 @@ func (g *DockerfileGenerator) Generate(baseImage string, remoteUser string, feat
 	// Install features
 	for i, feature := range features {
 		// COPY the feature directory into the image so install.sh can reference other files
-		// Use basename for the COPY source (relative to build context which is .devcontainer)
-		featureBasename := filepath.Base(feature.InstallPath)
-		// If it's in oci-cache, we need the relative path oci-cache/basename
-		featureSource := featureBasename
-		if strings.Contains(feature.InstallPath, "oci-cache") {
-			featureSource = filepath.Join("oci-cache", featureBasename)
+		// Calculate relative path from build context to feature directory
+		relPath, err := filepath.Rel(buildContextPath, feature.InstallPath)
+		if err != nil {
+			// If we can't compute relative path, try to use the feature as-is
+			// This might happen for OCI features in cache
+			relPath = filepath.Base(feature.InstallPath)
+			if strings.Contains(feature.InstallPath, "oci-cache") {
+				relPath = filepath.Join("oci-cache", filepath.Base(feature.InstallPath))
+			}
 		}
 
 		featureDestPath := fmt.Sprintf("/tmp/devcontainer-features/%d-%s", i, feature.ID)
-		sb.WriteString(fmt.Sprintf("COPY %s %s\n", featureSource, featureDestPath))
+		sb.WriteString(fmt.Sprintf("COPY %s %s\n", relPath, featureDestPath))
 
 		// Run the install script from its directory so relative paths work
 		sb.WriteString(fmt.Sprintf("RUN cd %s && chmod +x install.sh && ./install.sh\n\n", featureDestPath))

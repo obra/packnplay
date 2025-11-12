@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/obra/packnplay/internal/dockerfile"
+	"github.com/obra/packnplay/pkg/container"
 	"github.com/obra/packnplay/pkg/devcontainer"
 )
 
@@ -92,9 +93,7 @@ func (im *ImageManager) pullImage(image string) error {
 // For secrets, use containerEnv with ${localEnv:SECRET} variable substitution
 // which injects secrets at runtime without persisting them in the image.
 func (im *ImageManager) buildImage(devConfig *devcontainer.Config, projectPath string) error {
-	projectName := filepath.Base(projectPath)
-	// Docker image names must be lowercase
-	imageName := fmt.Sprintf("packnplay-%s-devcontainer:latest", strings.ToLower(projectName))
+	imageName := container.GenerateImageName(projectPath)
 
 	// Check if already built
 	_, err := im.client.Run("image", "inspect", imageName)
@@ -198,7 +197,8 @@ func (im *ImageManager) buildWithFeatures(devConfig *devcontainer.Config, projec
 		baseImage = "ubuntu:22.04"
 	}
 
-	dockerfileContent, err := generator.Generate(baseImage, devConfig.RemoteUser, orderedFeatures)
+	buildContextPath := filepath.Join(projectPath, ".devcontainer")
+	dockerfileContent, err := generator.Generate(baseImage, devConfig.RemoteUser, orderedFeatures, buildContextPath)
 	if err != nil {
 		return fmt.Errorf("failed to generate Dockerfile: %w", err)
 	}
