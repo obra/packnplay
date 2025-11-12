@@ -190,6 +190,26 @@ func (im *ImageManager) buildWithFeatures(devConfig *devcontainer.Config, projec
 		return fmt.Errorf("failed to resolve feature dependencies: %w", err)
 	}
 
+	// Copy OCI features into build context so Docker can access them
+	buildContextPath := filepath.Join(projectPath, ".devcontainer")
+	ociCacheDir := filepath.Join(buildContextPath, "oci-cache")
+
+	for _, feature := range orderedFeatures {
+		// Check if this is an OCI feature (outside the build context)
+		if !strings.HasPrefix(feature.InstallPath, buildContextPath) {
+			// Copy OCI feature into build context
+			destDir := filepath.Join(ociCacheDir, filepath.Base(feature.InstallPath))
+
+			// Remove existing cached copy in build context
+			os.RemoveAll(destDir)
+
+			// Copy feature directory into build context
+			if err := copyDir(feature.InstallPath, destDir); err != nil {
+				return fmt.Errorf("failed to copy OCI feature %s into build context: %w", feature.ID, err)
+			}
+		}
+	}
+
 	// Generate Dockerfile with features
 	generator := dockerfile.NewDockerfileGenerator()
 	baseImage := devConfig.Image
@@ -197,7 +217,6 @@ func (im *ImageManager) buildWithFeatures(devConfig *devcontainer.Config, projec
 		baseImage = "ubuntu:22.04"
 	}
 
-	buildContextPath := filepath.Join(projectPath, ".devcontainer")
 	dockerfileContent, err := generator.Generate(baseImage, devConfig.RemoteUser, orderedFeatures, buildContextPath)
 	if err != nil {
 		return fmt.Errorf("failed to generate Dockerfile: %w", err)
@@ -222,5 +241,65 @@ func (im *ImageManager) buildWithFeatures(devConfig *devcontainer.Config, projec
 		return fmt.Errorf("failed to build image with features: %w", err)
 	}
 
+	// Clean up OCI cache in build context after successful build
+	os.RemoveAll(ociCacheDir)
+
 	return nil
+}
+
+// copyDir recursively copies a directory from src to dst
+func copyDir(src, dst string) error {
+	// Get properties of source dir
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	// Create destination directory
+	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
+		return err
+	}
+
+	// Read all entries in source directory
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			// Recursively copy subdirectory
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			// Copy file
+			if err := copyFile(srcPath, dstPath); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// copyFile copies a single file from src to dst
+func copyFile(src, dst string) error {
+	// Read source file
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+
+	// Get source file permissions
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	// Write destination file with same permissions
+	return os.WriteFile(dst, data, srcInfo.Mode())
 }
