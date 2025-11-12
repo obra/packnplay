@@ -88,3 +88,53 @@ apt-get install -y curl
 		t.Errorf("RUN should come before final USER statement")
 	}
 }
+
+func TestGenerateMultiStageWithOCIFeatures(t *testing.T) {
+	// Create OCI feature (simulated cached feature)
+	tmpDir := t.TempDir()
+	ociFeatureDir := filepath.Join(tmpDir, "oci-cache", "common-utils")
+	err := os.MkdirAll(ociFeatureDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create OCI feature directory: %v", err)
+	}
+
+	// Create install script
+	installScript := "#!/bin/bash\necho 'Installing common-utils'"
+	err = os.WriteFile(filepath.Join(ociFeatureDir, "install.sh"), []byte(installScript), 0755)
+	if err != nil {
+		t.Fatalf("Failed to write install.sh: %v", err)
+	}
+
+	// Create feature with OCI path
+	ociFeature := &devcontainer.ResolvedFeature{
+		ID:          "common-utils",
+		Version:     "2.0.0",
+		InstallPath: ociFeatureDir,
+		Options:     map[string]interface{}{},
+	}
+
+	generator := NewDockerfileGenerator()
+	buildContextPath := filepath.Join(tmpDir, "project", ".devcontainer")
+	dockerfile, err := generator.Generate("ubuntu:22.04", "testuser", []*devcontainer.ResolvedFeature{ociFeature}, buildContextPath)
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	// Verify multi-stage build structure
+	if !strings.Contains(dockerfile, "FROM ubuntu:22.04 as base") {
+		t.Errorf("Dockerfile should have base stage with 'FROM ubuntu:22.04 as base'\nGot:\n%s", dockerfile)
+	}
+	if !strings.Contains(dockerfile, "FROM alpine:latest as feature-prep") {
+		t.Errorf("Dockerfile should have feature-prep stage with 'FROM alpine:latest as feature-prep'\nGot:\n%s", dockerfile)
+	}
+	if !strings.Contains(dockerfile, "COPY --from=") {
+		t.Errorf("Dockerfile should have COPY --from= for multi-stage\nGot:\n%s", dockerfile)
+	}
+	// Check that we're using multi-stage by checking for the named stages
+	if !strings.Contains(dockerfile, "as feature-prep") {
+		t.Errorf("Dockerfile should have named feature-prep stage\nGot:\n%s", dockerfile)
+	}
+	if !strings.Contains(dockerfile, "as base") {
+		t.Errorf("Dockerfile should have named base stage\nGot:\n%s", dockerfile)
+	}
+}
