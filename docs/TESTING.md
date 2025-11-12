@@ -362,8 +362,8 @@ TestE2E_Feature_Scenario            // TestE2E_OnCreateCommand_RunsOnce
 
 ## Additional Resources
 
-- [DevContainer E2E Specification](DEVCONTAINER_E2E_SPEC.md) - Detailed test requirements
 - [DevContainer Guide](DEVCONTAINER_GUIDE.md) - Feature documentation
+- [E2E Test Suite](../pkg/runner/e2e_test.go) - Complete test implementation
 - [Go Testing Package](https://pkg.go.dev/testing) - Official documentation
 - [Testify Package](https://github.com/stretchr/testify) - Assertion library
 

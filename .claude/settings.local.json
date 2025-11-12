@@ -114,7 +114,8 @@
       "Bash(apt list:*)",
       "Bash(apt search:*)",
       "Bash(golangci-lint:*)",
-      "Bash(gofmt:*)"
+      "Bash(gofmt:*)",
+      "Bash(git mv:*)"
     ],
     "deny": [],
     "ask": []
