@@ -390,6 +390,90 @@ Browse available features:
 - Official features: https://github.com/devcontainers/features
 - Community registry: https://containers.dev/features
 
+#### Feature Options Processing
+
+Packnplay fully supports the devcontainer features specification for option processing. Feature options are automatically converted to environment variables that the feature's install script can use.
+
+**How Options Work:**
+1. Options defined in `devcontainer-feature.json` specify available configuration
+2. User-provided values override defaults from the feature metadata
+3. Options are converted to environment variables per specification (uppercase, dashes to underscores)
+4. Environment variables are available during feature installation
+
+**Example:**
+```json
+{
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "18.20.0",
+      "nodeGypDependencies": true
+    }
+  }
+}
+```
+
+During installation, the node feature receives:
+- `VERSION=18.20.0`
+- `NODEGYPDEPENDENCIES=true`
+
+#### Feature Lifecycle Hooks
+
+Features can contribute lifecycle commands that execute at specific points in the container lifecycle. **Feature commands always execute before user commands**, ensuring features can set up the environment properly.
+
+**Execution Order:**
+1. Feature `onCreateCommand` (all features, in installation order)
+2. User `onCreateCommand`
+3. Feature `postCreateCommand` (all features, in installation order)
+4. User `postCreateCommand`
+5. Feature `postStartCommand` (all features, in installation order)
+6. User `postStartCommand`
+
+**Example Feature with Lifecycle Hook:**
+```json
+// devcontainer-feature.json
+{
+  "id": "my-feature",
+  "version": "1.0.0",
+  "postCreateCommand": "echo 'Feature setup complete' > /tmp/feature-status.txt"
+}
+```
+
+When combined with user commands:
+```json
+{
+  "features": {
+    "./local-features/my-feature": {}
+  },
+  "postCreateCommand": "cat /tmp/feature-status.txt && echo 'User setup complete'"
+}
+```
+
+The feature command runs first, then the user command can read its output.
+
+#### Feature Container Properties
+
+Features can contribute container configuration properties that are merged into the final container:
+
+- **Security Options:** `privileged`, `capAdd`, `securityOpt`
+- **Environment Variables:** `containerEnv`
+- **Mounts:** Feature-specific volume mounts
+- **Init System:** `init` for proper signal handling
+
+**Example:**
+```json
+// Feature metadata
+{
+  "id": "docker-feature",
+  "privileged": true,
+  "capAdd": ["NET_ADMIN"],
+  "containerEnv": {
+    "DOCKER_FEATURE_ENABLED": "true"
+  }
+}
+```
+
+These properties are automatically applied when the feature is used.
+
 ### Variable Substitution
 
 Use variable substitution in `containerEnv`, `remoteEnv`, `mounts`, and `runArgs` values.
