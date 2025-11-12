@@ -1937,3 +1937,35 @@ echo "Feature installed successfully"
 	require.NoError(t, err, "Should be able to ls the feature marker: %s", output2)
 	require.Contains(t, output2, "test-feature-marker")
 }
+
+// TestE2E_CommunityFeature tests REAL community feature from ghcr.io
+func TestE2E_CommunityFeature(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Use REAL ghcr.io/devcontainers/features/common-utils:2
+	// This feature installs common utilities like curl, jq, etc.
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"features": {
+				"ghcr.io/devcontainers/features/common-utils:2": {}
+			}
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Verify feature installed by checking if jq is available
+	// common-utils installs jq as one of its utilities
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "which", "jq")
+	require.NoError(t, err, "jq should be installed by common-utils feature: %s", output)
+	require.Contains(t, output, "/usr/bin/jq")
+}

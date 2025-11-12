@@ -172,8 +172,9 @@ func (im *ImageManager) buildWithFeatures(devConfig *devcontainer.Config, projec
 		}
 
 		// Use absolute path if provided, otherwise resolve relative to .devcontainer
+		// Don't modify OCI registry references (they contain registry domains)
 		fullPath := featurePath
-		if !filepath.IsAbs(featurePath) {
+		if !filepath.IsAbs(featurePath) && !strings.Contains(featurePath, "ghcr.io/") && !strings.Contains(featurePath, "mcr.microsoft.com/") {
 			fullPath = filepath.Join(projectPath, ".devcontainer", featurePath)
 		}
 

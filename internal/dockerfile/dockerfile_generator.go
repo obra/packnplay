@@ -2,7 +2,6 @@ package dockerfile
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -28,32 +27,21 @@ func (g *DockerfileGenerator) Generate(baseImage string, remoteUser string, feat
 	sb.WriteString("USER root\n\n")
 
 	// Install features
-	for _, feature := range features {
-		installScript := filepath.Join(feature.InstallPath, "install.sh")
-		content, err := os.ReadFile(installScript)
-		if err != nil {
-			return "", fmt.Errorf("failed to read install script: %w", err)
+	for i, feature := range features {
+		// COPY the feature directory into the image so install.sh can reference other files
+		// Use basename for the COPY source (relative to build context which is .devcontainer)
+		featureBasename := filepath.Base(feature.InstallPath)
+		// If it's in oci-cache, we need the relative path oci-cache/basename
+		featureSource := featureBasename
+		if strings.Contains(feature.InstallPath, "oci-cache") {
+			featureSource = filepath.Join("oci-cache", featureBasename)
 		}
 
-		// Execute the install script using sh
-		// Note: We use sh -c to execute the script content directly
-		scriptStr := strings.ReplaceAll(string(content), `\`, `\\`)
-		scriptStr = strings.ReplaceAll(scriptStr, `"`, `\"`)
-		scriptStr = strings.ReplaceAll(scriptStr, "\n", " && ")
+		featureDestPath := fmt.Sprintf("/tmp/devcontainer-features/%d-%s", i, feature.ID)
+		sb.WriteString(fmt.Sprintf("COPY %s %s\n", featureSource, featureDestPath))
 
-		// Remove shebang if present
-		if strings.HasPrefix(scriptStr, "#!/") {
-			parts := strings.SplitN(scriptStr, " && ", 2)
-			if len(parts) > 1 {
-				scriptStr = parts[1]
-			}
-		}
-
-		// Remove trailing && if present
-		scriptStr = strings.TrimSuffix(strings.TrimSpace(scriptStr), "&&")
-		scriptStr = strings.TrimSpace(scriptStr)
-
-		sb.WriteString(fmt.Sprintf("RUN sh -c \"%s\"\n\n", scriptStr))
+		// Run the install script from its directory so relative paths work
+		sb.WriteString(fmt.Sprintf("RUN cd %s && chmod +x install.sh && ./install.sh\n\n", featureDestPath))
 	}
 
 	// Switch back to remote user if specified
