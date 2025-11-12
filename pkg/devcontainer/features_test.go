@@ -239,3 +239,78 @@ func TestResolveOCIFeature(t *testing.T) {
 		t.Errorf("Expected cached feature to have same InstallPath, got %s vs %s", resolved2.InstallPath, resolved.InstallPath)
 	}
 }
+
+func TestProcessFeatureOptions(t *testing.T) {
+	tests := []struct {
+		name           string
+		featureOptions map[string]interface{}
+		optionSpecs    map[string]OptionSpec
+		expectedEnvs   map[string]string
+	}{
+		{
+			name: "node version option",
+			featureOptions: map[string]interface{}{
+				"version":      "18.20.0",
+				"install-type": "nvm",
+			},
+			optionSpecs: map[string]OptionSpec{
+				"version":      {Type: "string", Default: "latest"},
+				"install-type": {Type: "string", Default: "apt"},
+			},
+			expectedEnvs: map[string]string{
+				"VERSION":      "18.20.0",
+				"INSTALL_TYPE": "nvm",
+			},
+		},
+		{
+			name:           "use defaults when options missing",
+			featureOptions: map[string]interface{}{},
+			optionSpecs: map[string]OptionSpec{
+				"version": {Type: "string", Default: "latest"},
+			},
+			expectedEnvs: map[string]string{
+				"VERSION": "latest",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			processor := NewFeatureOptionsProcessor()
+			envs := processor.ProcessOptions(tt.featureOptions, tt.optionSpecs)
+			if len(envs) != len(tt.expectedEnvs) {
+				t.Errorf("Expected %d environment variables, got %d", len(tt.expectedEnvs), len(envs))
+			}
+			for key, expectedValue := range tt.expectedEnvs {
+				if actualValue, ok := envs[key]; !ok {
+					t.Errorf("Expected environment variable %s not found", key)
+				} else if actualValue != expectedValue {
+					t.Errorf("Expected %s=%s, got %s=%s", key, expectedValue, key, actualValue)
+				}
+			}
+		})
+	}
+}
+
+func TestNormalizeOptionName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"version", "VERSION"},
+		{"install-type", "INSTALL_TYPE"},
+		{"installZsh", "INSTALLZSH"},
+		{"node-version", "NODE_VERSION"},
+		{"123test", "_123TEST"},
+		{"test@key", "TEST_KEY"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := normalizeOptionName(tt.input)
+			if result != tt.expected {
+				t.Errorf("Expected %s, got %s", tt.expected, result)
+			}
+		})
+	}
+}

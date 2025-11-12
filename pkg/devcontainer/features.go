@@ -6,17 +6,27 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
+// OptionSpec represents a feature option specification
+type OptionSpec struct {
+	Type        string      `json:"type"`
+	Default     interface{} `json:"default,omitempty"`
+	Description string      `json:"description,omitempty"`
+	Proposals   []string    `json:"proposals,omitempty"`
+}
+
 // FeatureMetadata represents the metadata from devcontainer-feature.json
 type FeatureMetadata struct {
-	ID            string   `json:"id"`
-	Version       string   `json:"version"`
-	Name          string   `json:"name"`
-	Description   string   `json:"description"`
-	DependsOn     []string `json:"dependsOn,omitempty"`
-	InstallsAfter []string `json:"installsAfter,omitempty"`
+	ID            string                 `json:"id"`
+	Version       string                 `json:"version"`
+	Name          string                 `json:"name"`
+	Description   string                 `json:"description"`
+	Options       map[string]OptionSpec  `json:"options,omitempty"`
+	DependsOn     []string               `json:"dependsOn,omitempty"`
+	InstallsAfter []string               `json:"installsAfter,omitempty"`
 }
 
 // ResolvedFeature represents a feature that has been resolved and is ready for installation
@@ -25,6 +35,7 @@ type ResolvedFeature struct {
 	Version       string
 	InstallPath   string
 	Options       map[string]interface{}
+	Metadata      *FeatureMetadata
 	DependsOn     []string
 	InstallsAfter []string
 }
@@ -147,6 +158,7 @@ func (r *FeatureResolver) ResolveFeature(featurePath string, options map[string]
 		Version:       metadata.Version,
 		InstallPath:   featurePath,
 		Options:       options,
+		Metadata:      &metadata,
 		DependsOn:     metadata.DependsOn,
 		InstallsAfter: metadata.InstallsAfter,
 	}
@@ -242,4 +254,51 @@ func (r *FeatureResolver) ResolveFeatures(features map[string]*ResolvedFeature) 
 	}
 
 	return result, nil
+}
+
+// FeatureOptionsProcessor handles option to environment variable conversion
+type FeatureOptionsProcessor struct{}
+
+// NewFeatureOptionsProcessor creates a new options processor
+func NewFeatureOptionsProcessor() *FeatureOptionsProcessor {
+	return &FeatureOptionsProcessor{}
+}
+
+// ProcessOptions converts feature options to environment variables per specification
+func (p *FeatureOptionsProcessor) ProcessOptions(userOptions map[string]interface{}, optionSpecs map[string]OptionSpec) map[string]string {
+	result := make(map[string]string)
+
+	// Process all option specs (apply defaults, then user overrides)
+	for optionName, spec := range optionSpecs {
+		envName := normalizeOptionName(optionName)
+
+		// Start with default value
+		value := spec.Default
+
+		// Override with user value if provided
+		if userValue, exists := userOptions[optionName]; exists {
+			value = userValue
+		}
+
+		// Convert to string
+		if value != nil {
+			result[envName] = fmt.Sprintf("%v", value)
+		}
+	}
+
+	return result
+}
+
+// normalizeOptionName converts option name to environment variable per specification
+func normalizeOptionName(name string) string {
+	// Per spec: replace non-word chars with underscore, prefix digits with underscore, uppercase
+	re := regexp.MustCompile(`[^\w_]`)
+	normalized := re.ReplaceAllString(name, "_")
+
+	re2 := regexp.MustCompile(`^[\d]+`)
+	if re2.MatchString(normalized) {
+		normalized = "_" + normalized
+	}
+
+	return strings.ToUpper(normalized)
 }

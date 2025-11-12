@@ -28,7 +28,18 @@ func (g *DockerfileGenerator) Generate(baseImage string, remoteUser string, feat
 	sb.WriteString("USER root\n\n")
 
 	// Install features
+	processor := devcontainer.NewFeatureOptionsProcessor()
 	for i, feature := range features {
+		sb.WriteString(fmt.Sprintf("# Install feature: %s\n", feature.ID))
+
+		// Process feature options to environment variables
+		if feature.Metadata != nil && feature.Metadata.Options != nil {
+			envVars := processor.ProcessOptions(feature.Options, feature.Metadata.Options)
+			for envName, envValue := range envVars {
+				sb.WriteString(fmt.Sprintf("ENV %s=%s\n", envName, envValue))
+			}
+		}
+
 		// COPY the feature directory into the image so install.sh can reference other files
 		// Calculate relative path from build context to feature directory
 		relPath, err := filepath.Rel(buildContextPath, feature.InstallPath)
