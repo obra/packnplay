@@ -2,6 +2,8 @@ package runner
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/obra/packnplay/pkg/devcontainer"
@@ -293,5 +295,65 @@ func TestImageManager_BuildWithAdvancedOptions(t *testing.T) {
 
 	if !mockClient.buildCalled {
 		t.Error("Expected image build to be called")
+	}
+}
+
+// TestImageManager_BuildWithFeatures tests that buildImage processes features
+func TestImageManager_BuildWithFeatures(t *testing.T) {
+	// Test: When devcontainer specifies features, process them and build with generated Dockerfile
+
+	// Create temporary project directory
+	tempDir := t.TempDir()
+	devcontainerDir := filepath.Join(tempDir, ".devcontainer")
+	if err := os.MkdirAll(devcontainerDir, 0755); err != nil {
+		t.Fatalf("Failed to create .devcontainer dir: %v", err)
+	}
+
+	// Create test feature
+	featureDir := filepath.Join(devcontainerDir, "test-feature")
+	if err := os.MkdirAll(featureDir, 0755); err != nil {
+		t.Fatalf("Failed to create feature dir: %v", err)
+	}
+
+	// Create feature metadata
+	featureJSON := `{
+		"id": "test-feature",
+		"version": "1.0.0",
+		"name": "Test Feature",
+		"description": "A test feature"
+	}`
+	if err := os.WriteFile(filepath.Join(featureDir, "devcontainer-feature.json"), []byte(featureJSON), 0644); err != nil {
+		t.Fatalf("Failed to write feature metadata: %v", err)
+	}
+
+	// Create install script
+	installScript := `#!/bin/bash
+echo "Installing test feature"
+`
+	if err := os.WriteFile(filepath.Join(featureDir, "install.sh"), []byte(installScript), 0755); err != nil {
+		t.Fatalf("Failed to write install script: %v", err)
+	}
+
+	mockClient := &mockDockerClient{
+		buildCalled: false,
+	}
+
+	im := NewImageManager(mockClient, false)
+
+	devConfig := &devcontainer.Config{
+		Image:      "ubuntu:22.04",
+		RemoteUser: "testuser",
+		Features: map[string]interface{}{
+			"test-feature": map[string]interface{}{},
+		},
+	}
+
+	err := im.EnsureAvailable(devConfig, tempDir)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if !mockClient.buildCalled {
+		t.Error("Expected image build to be called when features are present")
 	}
 }

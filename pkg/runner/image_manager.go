@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/obra/packnplay/internal/dockerfile"
 	"github.com/obra/packnplay/pkg/devcontainer"
 )
 
@@ -37,9 +38,15 @@ func NewImageManager(client DockerClient, verbose bool) *ImageManager {
 
 // EnsureAvailable ensures the container image is available locally.
 // If a Dockerfile is specified in devConfig, it builds the image.
+// If features are specified, it builds the image with features.
 // If an image name is specified, it pulls the image if not already present.
 // Returns an error if neither image nor Dockerfile is specified.
 func (im *ImageManager) EnsureAvailable(devConfig *devcontainer.Config, projectPath string) error {
+	// If features are specified, build with features
+	if len(devConfig.Features) > 0 {
+		return im.buildImage(devConfig, projectPath)
+	}
+
 	// If Dockerfile specified (either DockerFile or Build.Dockerfile), build it
 	if devConfig.HasDockerfile() {
 		return im.buildImage(devConfig, projectPath)
@@ -99,6 +106,11 @@ func (im *ImageManager) buildImage(devConfig *devcontainer.Config, projectPath s
 		return nil
 	}
 
+	// Process features if present
+	if len(devConfig.Features) > 0 {
+		return im.buildWithFeatures(devConfig, projectPath, imageName)
+	}
+
 	// Use GetDockerfile() helper which checks both DockerFile and Build.Dockerfile
 	dockerfile := devConfig.GetDockerfile()
 	if dockerfile == "" {
@@ -144,5 +156,65 @@ func (im *ImageManager) buildImage(devConfig *devcontainer.Config, projectPath s
 	if err := im.client.RunWithProgress(imageName, buildArgs...); err != nil {
 		return fmt.Errorf("failed to build image from %s: %w", dockerfile, err)
 	}
+	return nil
+}
+
+// buildWithFeatures builds a container image with devcontainer features
+func (im *ImageManager) buildWithFeatures(devConfig *devcontainer.Config, projectPath string, imageName string) error {
+	// Resolve features
+	resolver := devcontainer.NewFeatureResolver(filepath.Join(projectPath, ".devcontainer"))
+	resolvedFeatures := make(map[string]*devcontainer.ResolvedFeature)
+
+	for featurePath, options := range devConfig.Features {
+		optionsMap, ok := options.(map[string]interface{})
+		if !ok {
+			optionsMap = map[string]interface{}{}
+		}
+
+		fullPath := filepath.Join(projectPath, ".devcontainer", featurePath)
+		feature, err := resolver.ResolveFeature(fullPath, optionsMap)
+		if err != nil {
+			return fmt.Errorf("failed to resolve feature %s: %w", featurePath, err)
+		}
+		resolvedFeatures[feature.ID] = feature
+	}
+
+	// Resolve dependencies
+	orderedFeatures, err := resolver.ResolveFeatures(resolvedFeatures)
+	if err != nil {
+		return fmt.Errorf("failed to resolve feature dependencies: %w", err)
+	}
+
+	// Generate Dockerfile with features
+	generator := dockerfile.NewDockerfileGenerator()
+	baseImage := devConfig.Image
+	if baseImage == "" {
+		baseImage = "ubuntu:22.04"
+	}
+
+	dockerfileContent, err := generator.Generate(baseImage, devConfig.RemoteUser, orderedFeatures)
+	if err != nil {
+		return fmt.Errorf("failed to generate Dockerfile: %w", err)
+	}
+
+	// Write Dockerfile to temporary location
+	tempDockerfile := filepath.Join(projectPath, ".devcontainer", "Dockerfile.generated")
+	if err := os.WriteFile(tempDockerfile, []byte(dockerfileContent), 0644); err != nil {
+		return fmt.Errorf("failed to write generated Dockerfile: %w", err)
+	}
+
+	// Build with generated Dockerfile
+	contextPath := filepath.Join(projectPath, ".devcontainer")
+	buildArgs := []string{
+		"build",
+		"-f", tempDockerfile,
+		"-t", imageName,
+		contextPath,
+	}
+
+	if err := im.client.RunWithProgress(imageName, buildArgs...); err != nil {
+		return fmt.Errorf("failed to build image with features: %w", err)
+	}
+
 	return nil
 }
