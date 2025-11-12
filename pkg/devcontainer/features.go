@@ -18,15 +18,46 @@ type OptionSpec struct {
 	Proposals   []string    `json:"proposals,omitempty"`
 }
 
+// Mount represents a mount specification from feature metadata
+type Mount struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+	Type   string `json:"type"`
+}
+
 // FeatureMetadata represents the metadata from devcontainer-feature.json
+// Enhanced to support complete devcontainer-feature.json specification
 type FeatureMetadata struct {
-	ID            string                 `json:"id"`
-	Version       string                 `json:"version"`
-	Name          string                 `json:"name"`
-	Description   string                 `json:"description"`
-	Options       map[string]OptionSpec  `json:"options,omitempty"`
-	DependsOn     []string               `json:"dependsOn,omitempty"`
-	InstallsAfter []string               `json:"installsAfter,omitempty"`
+	// Required fields per specification
+	ID      string `json:"id"`
+	Version string `json:"version"`
+	Name    string `json:"name"`
+
+	// Optional description
+	Description string `json:"description,omitempty"`
+
+	// Options specification
+	Options map[string]OptionSpec `json:"options,omitempty"`
+
+	// Container properties that features can contribute
+	ContainerEnv map[string]string `json:"containerEnv,omitempty"`
+	Privileged   *bool             `json:"privileged,omitempty"`
+	Init         *bool             `json:"init,omitempty"`
+	CapAdd       []string          `json:"capAdd,omitempty"`
+	SecurityOpt  []string          `json:"securityOpt,omitempty"`
+	Entrypoint   []string          `json:"entrypoint,omitempty"`
+	Mounts       []Mount           `json:"mounts,omitempty"`
+
+	// Lifecycle hooks that features can contribute
+	OnCreateCommand      *LifecycleCommand `json:"onCreateCommand,omitempty"`
+	UpdateContentCommand *LifecycleCommand `json:"updateContentCommand,omitempty"`
+	PostCreateCommand    *LifecycleCommand `json:"postCreateCommand,omitempty"`
+	PostStartCommand     *LifecycleCommand `json:"postStartCommand,omitempty"`
+	PostAttachCommand    *LifecycleCommand `json:"postAttachCommand,omitempty"`
+
+	// Dependencies
+	DependsOn     []string `json:"dependsOn,omitempty"`
+	InstallsAfter []string `json:"installsAfter,omitempty"`
 }
 
 // ResolvedFeature represents a feature that has been resolved and is ready for installation
