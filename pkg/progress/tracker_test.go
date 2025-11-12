@@ -73,10 +73,10 @@ func TestProgressTracker_MultipleLayerProgress(t *testing.T) {
 	tracker := NewProgressTracker("test-image")
 
 	// Add first layer
-	tracker.ParseLine(`{"status":"Downloading","progressDetail":{"current":50,"total":100},"id":"layer1"}`)
+	_, _, _ = tracker.ParseLine(`{"status":"Downloading","progressDetail":{"current":50,"total":100},"id":"layer1"}`)
 
 	// Add second layer
-	tracker.ParseLine(`{"status":"Downloading","progressDetail":{"current":25,"total":100},"id":"layer2"}`)
+	_, _, _ = tracker.ParseLine(`{"status":"Downloading","progressDetail":{"current":25,"total":100},"id":"layer2"}`)
 
 	percent, _, _ := tracker.getProgress()
 
@@ -87,7 +87,7 @@ func TestProgressTracker_MultipleLayerProgress(t *testing.T) {
 	}
 
 	// Complete first layer
-	tracker.ParseLine(`{"status":"Download complete","id":"layer1"}`)
+	_, _, _ = tracker.ParseLine(`{"status":"Download complete","id":"layer1"}`)
 
 	percent, _, _ = tracker.getProgress()
 
@@ -128,14 +128,14 @@ func TestProgressTracker_IsComplete(t *testing.T) {
 	}
 
 	// After pull complete status
-	tracker.ParseLine(`{"status":"Pull complete"}`)
+	_, _, _ = tracker.ParseLine(`{"status":"Pull complete"}`)
 	if !tracker.IsComplete() {
 		t.Error("tracker should be complete after pull complete")
 	}
 
 	// Test cached status
 	tracker2 := NewProgressTracker("cached-image")
-	tracker2.ParseLine(`{"status":"Already exists","id":"layer1"}`)
+	_, _, _ = tracker2.ParseLine(`{"status":"Already exists","id":"layer1"}`)
 	if !tracker2.IsComplete() {
 		t.Error("tracker should be complete for cached image")
 	}

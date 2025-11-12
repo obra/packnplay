@@ -205,9 +205,9 @@ func TestBuildConfig_ToDockerArgs(t *testing.T) {
 			"VARIANT":      "16-bullseye",
 			"NODE_VERSION": "16.14.0",
 		},
-		Target:     "development",
-		CacheFrom:  []string{"ghcr.io/myorg/cache:latest"},
-		Options:    []string{"--pull"},
+		Target:    "development",
+		CacheFrom: []string{"ghcr.io/myorg/cache:latest"},
+		Options:   []string{"--pull"},
 	}
 
 	args := build.ToDockerArgs("myapp:latest")
@@ -419,4 +419,3 @@ func TestBuildConfig_InvalidJSON(t *testing.T) {
 		t.Error("Expected error for invalid JSON")
 	}
 }
-

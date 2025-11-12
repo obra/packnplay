@@ -25,7 +25,7 @@ func sanitizeName(name string) string {
 // GenerateLabels creates Docker labels for packnplay-managed containers
 func GenerateLabels(projectName, worktreeName string) map[string]string {
 	return map[string]string{
-		"managed-by":    "packnplay",
+		"managed-by":         "packnplay",
 		"packnplay-project":  projectName,
 		"packnplay-worktree": worktreeName,
 	}

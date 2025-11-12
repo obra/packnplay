@@ -18,7 +18,7 @@ type DevcontainerConfig struct {
 // UserDetectionResult contains the detected user and metadata about how it was detected
 type UserDetectionResult struct {
 	User    string `json:"user"`
-	Source  string `json:"source"`  // "devcontainer", "image_default", "runtime_detection", "fallback"
+	Source  string `json:"source"` // "devcontainer", "image_default", "runtime_detection", "fallback"
 	HomeDir string `json:"homeDir"`
 }
 

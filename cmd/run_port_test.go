@@ -143,10 +143,10 @@ func TestRunConfigIncludesPortMappings(t *testing.T) {
 
 	// This is where we'll create the RunConfig - this should include port mappings
 	runConfig := &runner.RunConfig{
-		Runtime:        cfg.ContainerRuntime,
-		DefaultImage:   cfg.DefaultImage,
-		Command:        []string{"echo", "hello"},
-		PublishPorts:   runPublishPorts, // This field doesn't exist yet - test should fail
+		Runtime:      cfg.ContainerRuntime,
+		DefaultImage: cfg.DefaultImage,
+		Command:      []string{"echo", "hello"},
+		PublishPorts: runPublishPorts, // This field doesn't exist yet - test should fail
 	}
 
 	// Verify the port mappings are included

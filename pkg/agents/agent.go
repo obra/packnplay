@@ -7,8 +7,8 @@ import (
 // Agent defines the interface for AI coding agents
 type Agent interface {
 	Name() string
-	ConfigDir() string           // e.g., ".claude", ".codex", ".gemini"
-	DefaultAPIKeyEnv() string    // e.g., "ANTHROPIC_API_KEY", "OPENAI_API_KEY"
+	ConfigDir() string             // e.g., ".claude", ".codex", ".gemini"
+	DefaultAPIKeyEnv() string      // e.g., "ANTHROPIC_API_KEY", "OPENAI_API_KEY"
 	RequiresSpecialHandling() bool // Claude needs credential overlay, others don't
 	GetMounts(hostHomeDir string, containerUser string) []Mount
 }
@@ -37,9 +37,9 @@ func GetSupportedAgents() []Agent {
 // ClaudeAgent implements Claude Code specific requirements
 type ClaudeAgent struct{}
 
-func (c *ClaudeAgent) Name() string                { return "claude" }
-func (c *ClaudeAgent) ConfigDir() string           { return ".claude" }
-func (c *ClaudeAgent) DefaultAPIKeyEnv() string    { return "ANTHROPIC_API_KEY" }
+func (c *ClaudeAgent) Name() string                  { return "claude" }
+func (c *ClaudeAgent) ConfigDir() string             { return ".claude" }
+func (c *ClaudeAgent) DefaultAPIKeyEnv() string      { return "ANTHROPIC_API_KEY" }
 func (c *ClaudeAgent) RequiresSpecialHandling() bool { return true } // Needs credential overlay
 
 func (c *ClaudeAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
@@ -60,9 +60,9 @@ func (c *ClaudeAgent) GetMounts(hostHomeDir string, containerUser string) []Moun
 // CodexAgent implements OpenAI Codex specific requirements
 type CodexAgent struct{}
 
-func (c *CodexAgent) Name() string                { return "codex" }
-func (c *CodexAgent) ConfigDir() string           { return ".codex" }
-func (c *CodexAgent) DefaultAPIKeyEnv() string    { return "OPENAI_API_KEY" }
+func (c *CodexAgent) Name() string                  { return "codex" }
+func (c *CodexAgent) ConfigDir() string             { return ".codex" }
+func (c *CodexAgent) DefaultAPIKeyEnv() string      { return "OPENAI_API_KEY" }
 func (c *CodexAgent) RequiresSpecialHandling() bool { return false } // Simple config mount
 
 func (c *CodexAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
@@ -83,9 +83,9 @@ func (c *CodexAgent) GetMounts(hostHomeDir string, containerUser string) []Mount
 // GeminiAgent implements Google Gemini CLI specific requirements
 type GeminiAgent struct{}
 
-func (g *GeminiAgent) Name() string                { return "gemini" }
-func (g *GeminiAgent) ConfigDir() string           { return ".gemini" }
-func (g *GeminiAgent) DefaultAPIKeyEnv() string    { return "GEMINI_API_KEY" }
+func (g *GeminiAgent) Name() string                  { return "gemini" }
+func (g *GeminiAgent) ConfigDir() string             { return ".gemini" }
+func (g *GeminiAgent) DefaultAPIKeyEnv() string      { return "GEMINI_API_KEY" }
 func (g *GeminiAgent) RequiresSpecialHandling() bool { return false } // Simple config mount
 
 func (g *GeminiAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
@@ -106,9 +106,9 @@ func (g *GeminiAgent) GetMounts(hostHomeDir string, containerUser string) []Moun
 // CopilotAgent implements GitHub Copilot CLI requirements
 type CopilotAgent struct{}
 
-func (c *CopilotAgent) Name() string                { return "copilot" }
-func (c *CopilotAgent) ConfigDir() string           { return ".copilot" }
-func (c *CopilotAgent) DefaultAPIKeyEnv() string    { return "GH_TOKEN" } // Uses GitHub auth
+func (c *CopilotAgent) Name() string                  { return "copilot" }
+func (c *CopilotAgent) ConfigDir() string             { return ".copilot" }
+func (c *CopilotAgent) DefaultAPIKeyEnv() string      { return "GH_TOKEN" } // Uses GitHub auth
 func (c *CopilotAgent) RequiresSpecialHandling() bool { return false }
 
 func (c *CopilotAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
@@ -129,9 +129,9 @@ func (c *CopilotAgent) GetMounts(hostHomeDir string, containerUser string) []Mou
 // QwenAgent implements Qwen Code CLI requirements
 type QwenAgent struct{}
 
-func (q *QwenAgent) Name() string                { return "qwen" }
-func (q *QwenAgent) ConfigDir() string           { return ".qwen" }
-func (q *QwenAgent) DefaultAPIKeyEnv() string    { return "QWEN_API_KEY" }
+func (q *QwenAgent) Name() string                  { return "qwen" }
+func (q *QwenAgent) ConfigDir() string             { return ".qwen" }
+func (q *QwenAgent) DefaultAPIKeyEnv() string      { return "QWEN_API_KEY" }
 func (q *QwenAgent) RequiresSpecialHandling() bool { return false }
 
 func (q *QwenAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
@@ -152,9 +152,9 @@ func (q *QwenAgent) GetMounts(hostHomeDir string, containerUser string) []Mount 
 // CursorAgent implements Cursor CLI requirements
 type CursorAgent struct{}
 
-func (c *CursorAgent) Name() string                { return "cursor" }
-func (c *CursorAgent) ConfigDir() string           { return ".cursor" }
-func (c *CursorAgent) DefaultAPIKeyEnv() string    { return "CURSOR_API_KEY" } // Assuming based on pattern
+func (c *CursorAgent) Name() string                  { return "cursor" }
+func (c *CursorAgent) ConfigDir() string             { return ".cursor" }
+func (c *CursorAgent) DefaultAPIKeyEnv() string      { return "CURSOR_API_KEY" } // Assuming based on pattern
 func (c *CursorAgent) RequiresSpecialHandling() bool { return false }
 
 func (c *CursorAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
@@ -175,9 +175,9 @@ func (c *CursorAgent) GetMounts(hostHomeDir string, containerUser string) []Moun
 // AmpAgent implements Sourcegraph Amp CLI requirements
 type AmpAgent struct{}
 
-func (a *AmpAgent) Name() string                { return "amp" }
-func (a *AmpAgent) ConfigDir() string           { return ".config/amp" } // Uses XDG config
-func (a *AmpAgent) DefaultAPIKeyEnv() string    { return "AMP_API_KEY" }
+func (a *AmpAgent) Name() string                  { return "amp" }
+func (a *AmpAgent) ConfigDir() string             { return ".config/amp" } // Uses XDG config
+func (a *AmpAgent) DefaultAPIKeyEnv() string      { return "AMP_API_KEY" }
 func (a *AmpAgent) RequiresSpecialHandling() bool { return false }
 
 func (a *AmpAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
@@ -198,9 +198,9 @@ func (a *AmpAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
 // DeepSeekAgent implements DeepSeek CLI requirements
 type DeepSeekAgent struct{}
 
-func (d *DeepSeekAgent) Name() string                { return "deepseek" }
-func (d *DeepSeekAgent) ConfigDir() string           { return ".deepseek" }
-func (d *DeepSeekAgent) DefaultAPIKeyEnv() string    { return "DEEPSEEK_API_KEY" }
+func (d *DeepSeekAgent) Name() string                  { return "deepseek" }
+func (d *DeepSeekAgent) ConfigDir() string             { return ".deepseek" }
+func (d *DeepSeekAgent) DefaultAPIKeyEnv() string      { return "DEEPSEEK_API_KEY" }
 func (d *DeepSeekAgent) RequiresSpecialHandling() bool { return false }
 
 func (d *DeepSeekAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {

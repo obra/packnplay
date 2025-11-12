@@ -69,7 +69,7 @@ func TestMountBuilder_BuildMounts_WithAgents(t *testing.T) {
 	mb := NewMountBuilder("/home/testuser", "testuser")
 
 	cfg := &RunConfig{
-		Path: "/project/path",
+		Path:        "/project/path",
 		Credentials: config.Credentials{},
 	}
 
@@ -89,7 +89,7 @@ func TestMountBuilder_BuildMounts_NoAgentsExist(t *testing.T) {
 	mb := NewMountBuilder("/nonexistent/path", "testuser")
 
 	cfg := &RunConfig{
-		Path: "/project/path",
+		Path:        "/project/path",
 		Credentials: config.Credentials{},
 	}
 

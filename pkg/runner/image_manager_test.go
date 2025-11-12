@@ -152,13 +152,13 @@ type mockDockerClient struct {
 	buildCalled  bool
 	pullError    error
 	buildError   error
-	inspectError error       // Error to return for image inspect
-	imageExists  bool        // If true, image inspect succeeds (image already exists)
-	calls        []string    // Track command names
-	capturedArgs [][]string  // Track all args for detailed verification
-	execCalls    [][]string  // Track exec calls for lifecycle testing
-	execOutput   string      // Output to return for exec
-	execError    error       // Error to return for exec
+	inspectError error      // Error to return for image inspect
+	imageExists  bool       // If true, image inspect succeeds (image already exists)
+	calls        []string   // Track command names
+	capturedArgs [][]string // Track all args for detailed verification
+	execCalls    [][]string // Track exec calls for lifecycle testing
+	execOutput   string     // Output to return for exec
+	execError    error      // Error to return for exec
 }
 
 func (m *mockDockerClient) RunWithProgress(imageName string, args ...string) error {
@@ -271,7 +271,7 @@ func TestImageManager_EnsureAvailable_BuildConfigPriority(t *testing.T) {
 func TestImageManager_BuildWithAdvancedOptions(t *testing.T) {
 	// Test: Verify BuildConfig generates proper docker build args
 	mockClient := &mockDockerClient{
-		buildCalled: false,
+		buildCalled:  false,
 		capturedArgs: [][]string{},
 	}
 

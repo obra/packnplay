@@ -13,9 +13,9 @@ import (
 
 // Client handles Docker CLI interactions
 type Client struct {
-	cmd                string
-	verbose            bool
-	supportsProgress   *bool // Cache for progress flag support
+	cmd              string
+	verbose          bool
+	supportsProgress *bool // Cache for progress flag support
 }
 
 // NewClient creates a new Docker client

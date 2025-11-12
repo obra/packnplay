@@ -149,9 +149,9 @@ func TestGetCredentialsFromProcess(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:        "command with quoted arguments",
-			command:     "echo '{\"Version\": 1, \"AccessKeyId\": \"AKIATEST\", \"SecretAccessKey\": \"secret123\"}'",
-			wantErr:     false,
+			name:    "command with quoted arguments",
+			command: "echo '{\"Version\": 1, \"AccessKeyId\": \"AKIATEST\", \"SecretAccessKey\": \"secret123\"}'",
+			wantErr: false,
 		},
 		{
 			name:        "command that fails",

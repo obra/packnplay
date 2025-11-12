@@ -47,11 +47,11 @@ func TestCompleteUserDetectionFlow(t *testing.T) {
 			expectDetection: false,
 		},
 		{
-			name:  "missing devcontainer.json uses GetDefaultConfig",
-			image: "ubuntu:22.04",
+			name:                "missing devcontainer.json uses GetDefaultConfig",
+			image:               "ubuntu:22.04",
 			devcontainerContent: "", // no devcontainer.json
-			expectedUser:    "root",
-			expectDetection: true,
+			expectedUser:        "root",
+			expectDetection:     true,
 		},
 	}
 
@@ -161,7 +161,6 @@ func TestAgentMountsDynamicUser(t *testing.T) {
 				ContainerPath string
 				ReadOnly      bool
 			}
-
 
 			getMounts := func(hostHomeDir string, containerUser string) []Mount {
 				containerHomeDir := "/root"

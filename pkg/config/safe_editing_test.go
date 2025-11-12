@@ -146,7 +146,7 @@ func TestLoadExistingOrEmpty(t *testing.T) {
 	}
 
 	data, _ := json.MarshalIndent(existingConfig, "", "  ")
-	os.WriteFile(configFile, data, 0644)
+	_ = os.WriteFile(configFile, data, 0644)
 
 	cfg, err = LoadExistingOrEmpty(configFile)
 	if err != nil {
@@ -179,9 +179,9 @@ func TestPartialConfigUpdate(t *testing.T) {
 
 	// Update only credentials
 	credUpdates := Credentials{
-		Git: true,  // Keep
-		SSH: true,  // Change
-		GH:  true,  // Add
+		Git: true, // Keep
+		SSH: true, // Change
+		GH:  true, // Add
 	}
 
 	updated := applyCredentialUpdates(original, credUpdates)

@@ -12,13 +12,13 @@ func TestHostPathPreservation(t *testing.T) {
 	hostPath := "/Users/jesse/Documents/GitHub/myproject"
 
 	runConfig := &RunConfig{
-		Path:         hostPath,
-		Worktree:     "main",
-		Command:      []string{"bash"},
-		Runtime:      "docker",
-		DefaultImage: "ubuntu:22.04",
-		Credentials:  config.Credentials{},
-		HostPath:     hostPath,
+		Path:          hostPath,
+		Worktree:      "main",
+		Command:       []string{"bash"},
+		Runtime:       "docker",
+		DefaultImage:  "ubuntu:22.04",
+		Credentials:   config.Credentials{},
+		HostPath:      hostPath,
 		LaunchCommand: "packnplay run bash",
 	}
 
@@ -57,13 +57,13 @@ func TestWorkingDirectoryPreservation(t *testing.T) {
 	hostPath := "/Users/jesse/Documents/GitHub/myproject"
 
 	runConfig := &RunConfig{
-		Path:         hostPath,
-		Worktree:     "feature-branch",
-		Command:      []string{"ls", "-la"},
-		Runtime:      "docker",
-		DefaultImage: "ubuntu:22.04",
-		Credentials:  config.Credentials{},
-		HostPath:     hostPath,
+		Path:          hostPath,
+		Worktree:      "feature-branch",
+		Command:       []string{"ls", "-la"},
+		Runtime:       "docker",
+		DefaultImage:  "ubuntu:22.04",
+		Credentials:   config.Credentials{},
+		HostPath:      hostPath,
 		LaunchCommand: "packnplay run ls -la",
 	}
 

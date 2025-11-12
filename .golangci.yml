@@ -1,0 +1,39 @@
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - staticcheck
+    - unused
+    - gofmt
+    - misspell
+
+issues:
+  exclude-rules:
+    # Ignore planned TUI implementation that will be integrated later
+    - path: pkg/config/config.go
+      linters:
+        - unused
+    # Ignore unused test infrastructure
+    - path: cmd/watch.go
+      linters:
+        - unused
+    - path: pkg/runner/image_manager_test.go
+      linters:
+        - unused
+    - path: pkg/runner/lifecycle_executor_test.go
+      linters:
+        - unused
+    - path: pkg/runner/registry_check_test.go
+      linters:
+        - unused
+    # Ignore planned feature implementations
+    - text: "checkAndNotifyAboutUpdates.*is unused"
+      linters:
+        - unused
+    - text: "getLocalImageInfo.*is unused"
+      linters:
+        - unused

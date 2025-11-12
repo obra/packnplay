@@ -19,9 +19,9 @@ func TestVersionTrackingPersistence(t *testing.T) {
 		LastCheck: time.Now(),
 		Notifications: map[string]VersionNotification{
 			"test-image:latest": {
-				Digest:       "sha256:abc123",
-				NotifiedAt:   time.Now().Add(-1 * time.Hour),
-				ImageName:    "test-image:latest",
+				Digest:     "sha256:abc123",
+				NotifiedAt: time.Now().Add(-1 * time.Hour),
+				ImageName:  "test-image:latest",
 			},
 		},
 	}
@@ -78,10 +78,10 @@ func TestShouldCheckForUpdates(t *testing.T) {
 	// Test when we should check for updates based on config and last check time
 
 	tests := []struct {
-		name          string
-		config        DefaultContainerConfig
-		lastCheck     time.Time
-		shouldCheck   bool
+		name        string
+		config      DefaultContainerConfig
+		lastCheck   time.Time
+		shouldCheck bool
 	}{
 		{
 			name: "checking disabled should not check",

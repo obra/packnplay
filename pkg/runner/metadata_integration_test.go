@@ -312,16 +312,16 @@ func TestMetadataIntegration_PersistenceAcrossRestarts(t *testing.T) {
 		metadata, _ := LoadMetadata(containerID)
 		executor := NewLifecycleExecutor(mockClient, containerID, "testuser", false, metadata)
 
-		executor.Execute("onCreate", &onCreate)
-		executor.Execute("postCreate", &postCreate)
-		executor.Execute("postStart", &postStart)
+		_ = executor.Execute("onCreate", &onCreate)
+		_ = executor.Execute("postCreate", &postCreate)
+		_ = executor.Execute("postStart", &postStart)
 
 		// All should execute
 		if len(mockClient.execCalls) != 3 {
 			t.Errorf("First start: Expected 3 exec calls, got %d", len(mockClient.execCalls))
 		}
 
-		SaveMetadata(metadata)
+		_ = SaveMetadata(metadata)
 	}
 
 	// Wait a bit to simulate time passing
@@ -333,16 +333,16 @@ func TestMetadataIntegration_PersistenceAcrossRestarts(t *testing.T) {
 		metadata, _ := LoadMetadata(containerID)
 		executor := NewLifecycleExecutor(mockClient, containerID, "testuser", false, metadata)
 
-		executor.Execute("onCreate", &onCreate)
-		executor.Execute("postCreate", &postCreate)
-		executor.Execute("postStart", &postStart)
+		_ = executor.Execute("onCreate", &onCreate)
+		_ = executor.Execute("postCreate", &postCreate)
+		_ = executor.Execute("postStart", &postStart)
 
 		// Only postStart should execute
 		if len(mockClient.execCalls) != 1 {
 			t.Errorf("Second start: Expected 1 exec call (postStart only), got %d", len(mockClient.execCalls))
 		}
 
-		SaveMetadata(metadata)
+		_ = SaveMetadata(metadata)
 	}
 
 	// Third container start with changed onCreate - onCreate and postStart should run
@@ -358,15 +358,15 @@ func TestMetadataIntegration_PersistenceAcrossRestarts(t *testing.T) {
 			t.Fatalf("Failed to create changed onCreate command: %v", err)
 		}
 
-		executor.Execute("onCreate", &onCreateChanged) // Changed
-		executor.Execute("postCreate", &postCreate)    // Same
-		executor.Execute("postStart", &postStart)      // Always runs
+		_ = executor.Execute("onCreate", &onCreateChanged) // Changed
+		_ = executor.Execute("postCreate", &postCreate)    // Same
+		_ = executor.Execute("postStart", &postStart)      // Always runs
 
 		// onCreate (changed) and postStart should execute
 		if len(mockClient.execCalls) != 2 {
 			t.Errorf("Third start: Expected 2 exec calls (onCreate changed + postStart), got %d", len(mockClient.execCalls))
 		}
 
-		SaveMetadata(metadata)
+		_ = SaveMetadata(metadata)
 	}
 }

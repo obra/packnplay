@@ -35,10 +35,10 @@ var (
 )
 
 var runCmd = &cobra.Command{
-	Use:   "run [flags] [command...]",
-	Short: "Run command in container",
-	Long:  `Start a container and execute the specified command inside it.`,
-	Args:  cobra.MinimumNArgs(1),
+	Use:           "run [flags] [command...]",
+	Short:         "Run command in container",
+	Long:          `Start a container and execute the specified command inside it.`,
+	Args:          cobra.MinimumNArgs(1),
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {

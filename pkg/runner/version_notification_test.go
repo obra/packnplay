@@ -69,10 +69,10 @@ func TestImageVersionInfo(t *testing.T) {
 	// Test getting version information from images
 
 	info := &ImageVersionInfo{
-		Digest:      "sha256:abc123def456",
-		Created:     time.Now().Add(-2 * time.Hour),
-		Size:        "1.2GB",
-		Tags:        []string{"latest", "v1.0"},
+		Digest:  "sha256:abc123def456",
+		Created: time.Now().Add(-2 * time.Hour),
+		Size:    "1.2GB",
+		Tags:    []string{"latest", "v1.0"},
 	}
 
 	if info.Digest != "sha256:abc123def456" {

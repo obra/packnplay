@@ -46,14 +46,8 @@ func TestGenerateLabelsIntegration(t *testing.T) {
 	hostPath := "/home/user/testproject"
 	launchCommand := "packnplay run --runtime docker --verbose --git-creds bash"
 
-	// Generate labels
-	labels := container.GenerateLabelsWithLaunchInfo(projectName, worktreeName, hostPath, launchCommand)
-
-	// Convert to string format (simulating Docker label format)
-	var labelParts []string
-	for k, v := range labels {
-		labelParts = append(labelParts, k+"="+v)
-	}
+	// Generate labels (validate generation works)
+	_ = container.GenerateLabelsWithLaunchInfo(projectName, worktreeName, hostPath, launchCommand)
 
 	// For predictable testing, construct the string manually
 	labelStr := "managed-by=packnplay,packnplay-project=testproject,packnplay-worktree=main,packnplay-host-path=/home/user/testproject,packnplay-launch-command=packnplay run --runtime docker --verbose --git-creds bash"

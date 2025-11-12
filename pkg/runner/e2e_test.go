@@ -248,7 +248,7 @@ func runPacknplayInDir(t *testing.T, dir string, args ...string) (string, error)
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("Failed to chdir to %s: %v", dir, err)
 	}
-	defer os.Chdir(oldwd)
+	defer func() { _ = os.Chdir(oldwd) }()
 
 	return runPacknplay(t, args...)
 }

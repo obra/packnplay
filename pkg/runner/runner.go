@@ -247,8 +247,8 @@ func Run(config *RunConfig) error {
 			}
 
 			// Build detailed error message
-			errorMsg := fmt.Sprintf("container already running for this worktree\n\n")
-			errorMsg += fmt.Sprintf("Container Details:\n")
+			errorMsg := "container already running for this worktree\n\n"
+			errorMsg += "Container Details:\n"
 			errorMsg += fmt.Sprintf("  Name: %s\n", details.Names)
 			errorMsg += fmt.Sprintf("  Status: %s\n", details.Status)
 			errorMsg += fmt.Sprintf("  Project: %s\n", details.Project)
@@ -260,12 +260,12 @@ func Run(config *RunConfig) error {
 				errorMsg += fmt.Sprintf("  Original Command: %s\n", details.LaunchCommand)
 			}
 
-			errorMsg += fmt.Sprintf("\nTo run your command in the existing container:\n")
+			errorMsg += "\nTo run your command in the existing container:\n"
 			errorMsg += fmt.Sprintf("  packnplay run%s --reconnect %s\n", worktreeFlag, cmdStr.String())
-			errorMsg += fmt.Sprintf("\nTo stop the existing container:\n")
+			errorMsg += "\nTo stop the existing container:\n"
 			errorMsg += fmt.Sprintf("  packnplay stop %s", details.Names)
 
-			return fmt.Errorf(errorMsg)
+			return fmt.Errorf("%s", errorMsg)
 		}
 
 		// User explicitly wants to reconnect
@@ -871,7 +871,6 @@ func Run(config *RunConfig) error {
 	return syscall.Exec(cmdPath, execArgs, os.Environ())
 }
 
-
 func containerIsRunning(dockerClient *docker.Client, name string) (bool, error) {
 	// Apple Container doesn't support --filter, so get all and filter client-side
 	isApple := dockerClient.Command() == "container"
@@ -1126,10 +1125,7 @@ func (i *ImageVersionInfo) ShortDigest() string {
 		return i.Digest
 	}
 	// Skip sha256: prefix if present
-	digest := i.Digest
-	if strings.HasPrefix(digest, "sha256:") {
-		digest = digest[7:]
-	}
+	digest := strings.TrimPrefix(i.Digest, "sha256:")
 	if len(digest) >= 8 {
 		return digest[:8]
 	}
@@ -1321,7 +1317,6 @@ func getLocalImageInfo(dockerClient *docker.Client, imageName string) (*ImageVer
 		Tags:    []string{},
 	}, nil
 }
-
 
 // getOrCreateContainerCredentialFile manages shared credential file for all containers
 func getOrCreateContainerCredentialFile(containerName string) (string, error) {

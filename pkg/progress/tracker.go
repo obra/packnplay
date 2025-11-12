@@ -17,11 +17,11 @@ type LayerProgress struct {
 
 // ProgressTracker aggregates progress across all layers
 type ProgressTracker struct {
-	layers      map[string]*LayerProgress
-	totalBytes  int64
+	layers       map[string]*LayerProgress
+	totalBytes   int64
 	currentBytes int64
-	status      string
-	imageName   string
+	status       string
+	imageName    string
 }
 
 // NewProgressTracker creates a new progress tracker for an image
@@ -140,7 +140,7 @@ func (t *ProgressTracker) updateLayer(msg DockerProgressMessage) {
 
 	// Mark as complete if status indicates completion
 	if strings.Contains(msg.Status, "complete") ||
-	   strings.Contains(msg.Status, "Already exists") {
+		strings.Contains(msg.Status, "Already exists") {
 		layer.Complete = true
 		// Ensure completed layers are counted as 100%
 		if layer.Total > 0 && layer.Current < layer.Total {

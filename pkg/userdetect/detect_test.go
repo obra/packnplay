@@ -9,11 +9,11 @@ import (
 
 func TestDetectContainerUser(t *testing.T) {
 	tests := []struct {
-		name          string
-		image         string
-		devcontainer  *DevcontainerConfig
-		expectedUser  string
-		shouldError   bool
+		name         string
+		image        string
+		devcontainer *DevcontainerConfig
+		expectedUser string
+		shouldError  bool
 	}{
 		{
 			name:         "devcontainer.json remoteUser takes precedence",
@@ -40,10 +40,10 @@ func TestDetectContainerUser(t *testing.T) {
 			expectedUser: "root", // this image runs as root by default (vscode user exists but isn't default)
 		},
 		{
-			name:        "invalid image should error",
-			image:       "nonexistent:invalid",
+			name:         "invalid image should error",
+			image:        "nonexistent:invalid",
 			devcontainer: nil,
-			shouldError: true,
+			shouldError:  true,
 		},
 	}
 
@@ -85,18 +85,18 @@ func TestDetectContainerUser(t *testing.T) {
 
 func TestDetectUsersInImage(t *testing.T) {
 	tests := []struct {
-		name         string
-		image        string
+		name          string
+		image         string
 		expectedUsers []string
 	}{
 		{
-			name:         "ubuntu should have root and potentially ubuntu user",
-			image:        "ubuntu:22.04",
+			name:          "ubuntu should have root and potentially ubuntu user",
+			image:         "ubuntu:22.04",
 			expectedUsers: []string{"root"}, // at minimum root should exist
 		},
 		{
-			name:         "node image should have node user",
-			image:        "node:18",
+			name:          "node image should have node user",
+			image:         "node:18",
 			expectedUsers: []string{"root", "node"}, // both root and node should exist
 		},
 	}

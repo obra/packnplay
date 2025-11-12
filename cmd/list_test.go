@@ -8,10 +8,10 @@ import (
 
 func TestParseLabels(t *testing.T) {
 	tests := []struct {
-		name            string
-		labels          string
-		wantProject     string
-		wantWorktree    string
+		name         string
+		labels       string
+		wantProject  string
+		wantWorktree string
 	}{
 		{
 			name:         "basic labels",

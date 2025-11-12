@@ -9,19 +9,19 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 // Config represents packnplay's configuration
 type Config struct {
-	ContainerRuntime   string                   `json:"container_runtime"` // docker, podman, or container
-	DefaultImage       string                   `json:"default_image"`     // deprecated: use DefaultContainer.Image
-	DefaultCredentials Credentials              `json:"default_credentials"`
-	DefaultEnvVars     []string                 `json:"default_env_vars"` // API keys to always proxy
-	EnvConfigs         map[string]EnvConfig     `json:"env_configs"`
-	DefaultContainer   DefaultContainerConfig   `json:"default_container"`
+	ContainerRuntime   string                 `json:"container_runtime"` // docker, podman, or container
+	DefaultImage       string                 `json:"default_image"`     // deprecated: use DefaultContainer.Image
+	DefaultCredentials Credentials            `json:"default_credentials"`
+	DefaultEnvVars     []string               `json:"default_env_vars"` // API keys to always proxy
+	EnvConfigs         map[string]EnvConfig   `json:"env_configs"`
+	DefaultContainer   DefaultContainerConfig `json:"default_container"`
 }
 
 // DefaultContainerConfig configures the default container and update behavior
@@ -169,8 +169,8 @@ func ShouldCheckForUpdates(config DefaultContainerConfig, lastCheck time.Time) b
 
 // ConfigUpdates represents partial config updates that preserve unshown settings
 type ConfigUpdates struct {
-	ContainerRuntime   *string      `json:"container_runtime,omitempty"`
-	DefaultCredentials *Credentials `json:"default_credentials,omitempty"`
+	ContainerRuntime   *string                 `json:"container_runtime,omitempty"`
+	DefaultCredentials *Credentials            `json:"default_credentials,omitempty"`
 	DefaultContainer   *DefaultContainerConfig `json:"default_container,omitempty"`
 }
 
@@ -541,15 +541,15 @@ type SettingsModal struct {
 	sections       []SettingsSection
 	currentSection int
 	currentField   int
-	buttonFocused  bool   // Are we focused on buttons (not fields)?
-	currentButton  int    // Which button is focused (0=save, 1=cancel)
+	buttonFocused  bool            // Are we focused on buttons (not fields)?
+	currentButton  int             // Which button is focused (0=save, 1=cancel)
 	textInput      textinput.Model // For text field editing
-	textEditing    bool   // Are we in text editing mode?
+	textEditing    bool            // Are we in text editing mode?
 	saved          bool
 	quitting       bool
 	width          int
 	height         int
-	scrollOffset   int    // Current scroll position in lines
+	scrollOffset   int // Current scroll position in lines
 }
 
 // SettingsSection represents a configuration section
@@ -1103,7 +1103,7 @@ func (m *SettingsModal) activateCurrentField() *SettingsModal {
 			nextIndex := (currentIndex + 1) % len(field.options)
 			field.value = field.options[nextIndex]
 		}
-	// Remove button handling from field activation - buttons are separate now
+		// Remove button handling from field activation - buttons are separate now
 	}
 
 	return m
@@ -1316,7 +1316,7 @@ func (m *SettingsModal) renderField(field SettingsField, focused bool) string {
 	baseIndent := "   " // 3 spaces
 	cursor := " "       // 1 space when not focused
 	if focused {
-		cursor = ">"    // 1 character when focused
+		cursor = ">" // 1 character when focused
 	}
 
 	// Title styling with FIXED width to prevent right-align jumping
@@ -1620,8 +1620,7 @@ func isOrbStackAvailable() bool {
 	return false
 }
 
-
-// Init implements tea.Model for TabbedConfigModel  
+// Init implements tea.Model for TabbedConfigModel
 func (m *TabbedConfigModel) Init() tea.Cmd {
 	return nil
 }
@@ -1635,7 +1634,7 @@ func (m *TabbedConfigModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		case "s":
-			m.saved = true  
+			m.saved = true
 			return m, tea.Quit
 		}
 	}
@@ -1652,4 +1651,3 @@ func (m *TabbedConfigModel) View() string {
 	}
 	return "Tabbed Config Placeholder"
 }
-

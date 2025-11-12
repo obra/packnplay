@@ -69,14 +69,14 @@ func TestNotificationMessage(t *testing.T) {
 	// Test the notification message formatting
 
 	localInfo := &ImageVersionInfo{
-		Digest: "sha256:abc123def",
+		Digest:  "sha256:abc123def",
 		Created: timeNow().Add(-48 * time.Hour), // 2 days old
 	}
 
 	remoteInfo := &ImageVersionInfo{
-		Digest: "sha256:xyz789ghi",
+		Digest:  "sha256:xyz789ghi",
 		Created: timeNow().Add(-1 * time.Hour), // 1 hour old
-		Size: "1.5GB",
+		Size:    "1.5GB",
 	}
 
 	message := formatVersionNotification("my-org/image:latest", localInfo, remoteInfo)

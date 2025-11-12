@@ -6,10 +6,10 @@ import (
 
 func TestDetermineWorktreePath(t *testing.T) {
 	tests := []struct {
-		name          string
-		projectPath   string
-		worktreeName  string
-		wantContains  []string
+		name         string
+		projectPath  string
+		worktreeName string
+		wantContains []string
 	}{
 		{
 			name:         "basic worktree path",
@@ -41,8 +41,8 @@ func TestDetermineWorktreePath(t *testing.T) {
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) &&
 		(s == substr || len(s) > len(substr) &&
-		(s[0:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
-		findSubstring(s, substr)))
+			(s[0:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+				findSubstring(s, substr)))
 }
 
 func findSubstring(s, substr string) bool {

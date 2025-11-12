@@ -8,12 +8,12 @@ import (
 
 func TestParseLabelsFromString(t *testing.T) {
 	testCases := []struct {
-		name               string
-		labels             string
-		expectedProject    string
-		expectedWorktree   string
-		expectedHostPath   string
-		expectedLaunchCmd  string
+		name              string
+		labels            string
+		expectedProject   string
+		expectedWorktree  string
+		expectedHostPath  string
+		expectedLaunchCmd string
 	}{
 		{
 			name:              "complete labels",

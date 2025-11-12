@@ -142,4 +142,3 @@ func TestRealSymlinkedGitconfig(t *testing.T) {
 
 	t.Logf("Successfully resolved symlink %s -> %s", gitconfigPath, resolvedPath)
 }
-

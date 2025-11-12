@@ -30,8 +30,8 @@ func init() {
 type credentialWatcher struct {
 	credentialsDir string
 	keychainKey    string
-	lastUpdate    time.Time
-	watcher       *fsnotify.Watcher
+	lastUpdate     time.Time
+	watcher        *fsnotify.Watcher
 }
 
 func runCredentialWatcher() error {
