@@ -115,7 +115,11 @@
       "Bash(apt search:*)",
       "Bash(golangci-lint:*)",
       "Bash(gofmt:*)",
-      "Bash(git mv:*)"
+      "Bash(git mv:*)",
+      "Bash(chmod:*)",
+      "WebFetch(domain:containers.dev)",
+      "Bash(go tool cover:*)",
+      "Bash(awk:*)"
     ],
     "deny": [],
     "ask": []

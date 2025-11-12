@@ -10,12 +10,12 @@ import (
 
 // Config represents a parsed devcontainer.json
 type Config struct {
-	Image        string            `json:"image"`
-	DockerFile   string            `json:"dockerFile"`
-	Build        *BuildConfig      `json:"build,omitempty"`
-	RemoteUser   string            `json:"remoteUser"`
-	ContainerEnv map[string]string `json:"containerEnv,omitempty"`
-	RemoteEnv    map[string]string `json:"remoteEnv,omitempty"`
+	Image        string                 `json:"image"`
+	DockerFile   string                 `json:"dockerFile"`
+	Build        *BuildConfig           `json:"build,omitempty"`
+	RemoteUser   string                 `json:"remoteUser"`
+	ContainerEnv map[string]string      `json:"containerEnv,omitempty"`
+	RemoteEnv    map[string]string      `json:"remoteEnv,omitempty"`
 	ForwardPorts []interface{}          `json:"forwardPorts,omitempty"` // int or string
 	Mounts       []string               `json:"mounts,omitempty"`       // Docker mount syntax
 	RunArgs      []string               `json:"runArgs,omitempty"`      // Additional docker run arguments

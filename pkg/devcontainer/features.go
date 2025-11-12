@@ -94,19 +94,11 @@ func (r *FeatureResolver) ResolveFeatures(features map[string]*ResolvedFeature) 
 		remaining[id] = feature
 	}
 
-	// Track visited features for circular dependency detection
-	visiting := make(map[string]bool)
-
 	for len(remaining) > 0 {
 		var roundInstalls []*ResolvedFeature
 
 		// Try to find features that can be installed in this round
-		for id, feature := range remaining {
-			// Check if already being visited (circular dependency)
-			if visiting[id] {
-				return nil, fmt.Errorf("circular dependency detected involving feature %s", id)
-			}
-
+		for _, feature := range remaining {
 			// Check if all hard dependencies (dependsOn) are satisfied
 			canInstall := true
 			for _, depID := range feature.DependsOn {

@@ -91,8 +91,8 @@ func TestResolveDependencies(t *testing.T) {
 		"name":    "Feature B",
 	}
 	metadataBJSON, _ := json.Marshal(metadataB)
-	os.WriteFile(filepath.Join(featureBPath, "devcontainer-feature.json"), metadataBJSON, 0644)
-	os.WriteFile(filepath.Join(featureBPath, "install.sh"), []byte("#!/bin/bash\necho 'B'\n"), 0755)
+	_ = os.WriteFile(filepath.Join(featureBPath, "devcontainer-feature.json"), metadataBJSON, 0644)
+	_ = os.WriteFile(filepath.Join(featureBPath, "install.sh"), []byte("#!/bin/bash\necho 'B'\n"), 0755)
 
 	// Create feature A (depends on feature-b)
 	featureAPath := filepath.Join(tmpDir, "feature-a")
@@ -106,8 +106,8 @@ func TestResolveDependencies(t *testing.T) {
 		"dependsOn": []string{"feature-b"},
 	}
 	metadataAJSON, _ := json.Marshal(metadataA)
-	os.WriteFile(filepath.Join(featureAPath, "devcontainer-feature.json"), metadataAJSON, 0644)
-	os.WriteFile(filepath.Join(featureAPath, "install.sh"), []byte("#!/bin/bash\necho 'A'\n"), 0755)
+	_ = os.WriteFile(filepath.Join(featureAPath, "devcontainer-feature.json"), metadataAJSON, 0644)
+	_ = os.WriteFile(filepath.Join(featureAPath, "install.sh"), []byte("#!/bin/bash\necho 'A'\n"), 0755)
 
 	// Create feature C (installs after feature-a)
 	featureCPath := filepath.Join(tmpDir, "feature-c")
@@ -121,8 +121,8 @@ func TestResolveDependencies(t *testing.T) {
 		"installsAfter": []string{"feature-a"},
 	}
 	metadataCJSON, _ := json.Marshal(metadataC)
-	os.WriteFile(filepath.Join(featureCPath, "devcontainer-feature.json"), metadataCJSON, 0644)
-	os.WriteFile(filepath.Join(featureCPath, "install.sh"), []byte("#!/bin/bash\necho 'C'\n"), 0755)
+	_ = os.WriteFile(filepath.Join(featureCPath, "devcontainer-feature.json"), metadataCJSON, 0644)
+	_ = os.WriteFile(filepath.Join(featureCPath, "install.sh"), []byte("#!/bin/bash\necho 'C'\n"), 0755)
 
 	// Create resolver and resolve features
 	resolver := NewFeatureResolver(cacheDir)
