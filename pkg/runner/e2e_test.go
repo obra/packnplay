@@ -63,8 +63,14 @@ func createTestProject(t *testing.T, files map[string]string) string {
 			t.Fatalf("Failed to create directory %s: %v", dir, err)
 		}
 
+		// Determine file permissions - install.sh files should be executable
+		perms := os.FileMode(0644)
+		if filepath.Base(fullPath) == "install.sh" {
+			perms = 0755
+		}
+
 		// Write file
-		if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(fullPath, []byte(content), perms); err != nil {
 			os.RemoveAll(projectDir)
 			t.Fatalf("Failed to write file %s: %v", fullPath, err)
 		}
@@ -1960,4 +1966,81 @@ func TestE2E_CommunityFeature(t *testing.T) {
 	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "which", "jq")
 	require.NoError(t, err, "jq should be installed by common-utils feature: %s", output)
 	require.Contains(t, output, "/usr/bin/jq")
+}
+
+// TestE2E_NodeFeatureWithVersion tests feature options processing with specific Node.js version
+func TestE2E_NodeFeatureWithVersion(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+			"features": {
+				"ghcr.io/devcontainers/features/node:1": {
+					"version": "18.20.0"
+				}
+			}
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Verify specific Node.js version installed
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "node", "--version")
+	require.NoError(t, err, "Node version check failed: %s", output)
+	require.Contains(t, output, "v18.20.0", "Expected specific Node.js version")
+}
+
+// TestE2E_FeatureLifecycleCommands tests that feature lifecycle commands execute before user commands
+func TestE2E_FeatureLifecycleCommands(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Feature metadata with lifecycle commands
+	metadata := `{
+		"id": "lifecycle-feature",
+		"version": "1.0.0",
+		"name": "Feature with Lifecycle",
+		"postCreateCommand": "echo 'feature postCreate' > /tmp/feature-lifecycle.log"
+	}`
+
+	installScript := `#!/bin/sh
+echo 'Feature installed'
+touch /feature-installed
+`
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"features": {
+				"./local-features/lifecycle-feature": {}
+			},
+			"postCreateCommand": "echo 'user postCreate' >> /tmp/feature-lifecycle.log"
+		}`,
+		".devcontainer/local-features/lifecycle-feature/devcontainer-feature.json": metadata,
+		".devcontainer/local-features/lifecycle-feature/install.sh":                 installScript,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Verify both feature and user lifecycle commands executed
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/tmp/feature-lifecycle.log")
+	require.NoError(t, err, "Lifecycle commands failed: %s", output)
+	require.Contains(t, output, "feature postCreate", "Feature postCreate should execute first")
+	require.Contains(t, output, "user postCreate", "User postCreate should execute second")
 }

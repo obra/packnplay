@@ -87,6 +87,13 @@ func (g *DockerfileGenerator) generateMultiStage(baseImage string, features []*d
 			}
 		}
 
+		// Add feature-contributed container environment variables
+		if feature.Metadata != nil && feature.Metadata.ContainerEnv != nil {
+			for envName, envValue := range feature.Metadata.ContainerEnv {
+				sb.WriteString(fmt.Sprintf("ENV %s=%s\n", envName, envValue))
+			}
+		}
+
 		featureDestPath := fmt.Sprintf("/tmp/devcontainer-features/%d-%s", i, feature.ID)
 		sb.WriteString(fmt.Sprintf("RUN cd %s && chmod +x install.sh && ./install.sh\n\n", featureDestPath))
 	}
@@ -123,6 +130,13 @@ func (g *DockerfileGenerator) generateSingleStage(baseImage string, features []*
 			}
 		}
 
+		// Add feature-contributed container environment variables
+		if feature.Metadata != nil && feature.Metadata.ContainerEnv != nil {
+			for envName, envValue := range feature.Metadata.ContainerEnv {
+				sb.WriteString(fmt.Sprintf("ENV %s=%s\n", envName, envValue))
+			}
+		}
+
 		// COPY the feature directory into the image so install.sh can reference other files
 		// Calculate relative path from build context to feature directory
 		relPath, err := filepath.Rel(buildContextPath, feature.InstallPath)
@@ -146,6 +160,7 @@ func (g *DockerfileGenerator) generateSingleStage(baseImage string, features []*
 	if remoteUser != "" {
 		sb.WriteString(fmt.Sprintf("USER %s\n", remoteUser))
 	}
+	sb.WriteString("WORKDIR /workspace\n")
 
 	return sb.String(), nil
 }

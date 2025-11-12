@@ -87,10 +87,9 @@ func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, fea
 			enhancedArgs = append(enhancedArgs, "--security-opt="+secOpt)
 		}
 
-		// Apply feature environment variables
-		for key, value := range metadata.ContainerEnv {
-			enhancedEnv[key] = value
-		}
+		// NOTE: ContainerEnv from features is set in the Dockerfile as ENV statements,
+		// not as runtime environment variables. This allows variable references like
+		// ${PATH} to be properly resolved inside the container.
 
 		// TODO: Apply feature-contributed mounts (Task 6)
 	}
@@ -923,7 +922,14 @@ func Run(config *RunConfig) error {
 					continue
 				}
 
-				feature, err := resolver.ResolveFeature(reference, optionsMap)
+				// Use absolute path if provided, otherwise resolve relative to .devcontainer
+				// Don't modify OCI registry references (they contain registry domains)
+				fullPath := reference
+				if !filepath.IsAbs(reference) && !strings.Contains(reference, "ghcr.io/") && !strings.Contains(reference, "mcr.microsoft.com/") {
+					fullPath = filepath.Join(workDir, ".devcontainer", reference)
+				}
+
+				feature, err := resolver.ResolveFeature(fullPath, optionsMap)
 				if err != nil {
 					if config.Verbose {
 						fmt.Fprintf(os.Stderr, "Warning: failed to resolve feature %s for lifecycle: %v\n", reference, err)

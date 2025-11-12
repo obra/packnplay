@@ -99,6 +99,20 @@ func (lc *LifecycleCommand) IsObject() bool {
 	return ok
 }
 
+// IsMerged returns true if the command is a merged command (internal type from lifecycle merger)
+func (lc *LifecycleCommand) IsMerged() bool {
+	_, ok := lc.raw.(*MergedCommands)
+	return ok
+}
+
+// AsMerged returns the merged commands if this is a merged command
+func (lc *LifecycleCommand) AsMerged() ([]string, bool) {
+	if merged, ok := lc.raw.(*MergedCommands); ok {
+		return merged.commands, true
+	}
+	return nil, false
+}
+
 // ToStringSlice converts the lifecycle command to a slice of string commands
 // This is useful for merging feature and user lifecycle commands
 // - String: returns slice with single command

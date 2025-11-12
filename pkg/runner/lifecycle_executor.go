@@ -49,7 +49,11 @@ func (le *LifecycleExecutor) Execute(commandType string, cmd *devcontainer.Lifec
 
 	// Handle different command types
 	var err error
-	if cmd.IsString() {
+	if cmd.IsMerged() {
+		// Handle merged commands from feature lifecycle hooks
+		commands, _ := cmd.AsMerged()
+		err = le.executeMergedCommands(commands)
+	} else if cmd.IsString() {
 		str, _ := cmd.AsString()
 		err = le.executeShellCommand(str)
 	} else if cmd.IsArray() {
@@ -91,6 +95,17 @@ func (le *LifecycleExecutor) executeShellCommand(cmd string) error {
 	}
 
 	return err
+}
+
+// executeMergedCommands executes a sequence of merged commands from features and user config.
+// Each command is executed in order. If any command fails, execution stops and returns the error.
+func (le *LifecycleExecutor) executeMergedCommands(commands []string) error {
+	for _, cmd := range commands {
+		if err := le.executeShellCommand(cmd); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // executeDirectCommand executes a command with direct arguments (no shell).
