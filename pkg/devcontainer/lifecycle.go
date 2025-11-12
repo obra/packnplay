@@ -98,3 +98,74 @@ func (lc *LifecycleCommand) IsObject() bool {
 	_, ok := lc.raw.(map[string]interface{})
 	return ok
 }
+
+// ToStringSlice converts the lifecycle command to a slice of string commands
+// This is useful for merging feature and user lifecycle commands
+// - String: returns slice with single command
+// - Array: joins array elements into a single command string
+// - Object: returns slice of all task commands (order may vary)
+// - MergedCommands: returns the commands as-is (used by lifecycle merger)
+func (lc *LifecycleCommand) ToStringSlice() []string {
+	if lc == nil {
+		return nil
+	}
+
+	// Handle MergedCommands (internal type from lifecycle merger)
+	// This must be checked before other types since it's stored in raw
+	if merged, ok := lc.raw.(*MergedCommands); ok {
+		return merged.commands
+	}
+
+	// Handle string command
+	if s, ok := lc.AsString(); ok {
+		return []string{s}
+	}
+
+	// Handle array command - join elements into single command
+	if arr, ok := lc.AsArray(); ok {
+		if len(arr) == 0 {
+			return nil
+		}
+		// Join array elements with space (e.g., ["npm", "install"] -> "npm install")
+		result := ""
+		for i, elem := range arr {
+			if i > 0 {
+				result += " "
+			}
+			result += elem
+		}
+		return []string{result}
+	}
+
+	// Handle object command (parallel tasks)
+	if obj, ok := lc.AsObject(); ok {
+		var result []string
+		for taskName, taskCmd := range obj {
+			// Each task can be a string or array
+			switch cmd := taskCmd.(type) {
+			case string:
+				result = append(result, cmd)
+			case []interface{}:
+				// Convert array to command string
+				cmdStr := ""
+				for i, elem := range cmd {
+					if i > 0 {
+						cmdStr += " "
+					}
+					if s, ok := elem.(string); ok {
+						cmdStr += s
+					}
+				}
+				if cmdStr != "" {
+					result = append(result, cmdStr)
+				}
+			default:
+				// Unknown type, use task name as fallback
+				result = append(result, fmt.Sprintf("# Task: %s", taskName))
+			}
+		}
+		return result
+	}
+
+	return nil
+}

@@ -797,7 +797,11 @@ func Run(config *RunConfig) error {
 
 	// Step 11: Execute lifecycle commands from devcontainer.json
 	// Commands are tracked: onCreate/postCreate run once, postStart always runs
-	if devConfig.OnCreateCommand != nil || devConfig.PostCreateCommand != nil || devConfig.PostStartCommand != nil {
+	// Feature lifecycle commands execute before user commands per specification
+	hasLifecycleCommands := devConfig.OnCreateCommand != nil || devConfig.PostCreateCommand != nil || devConfig.PostStartCommand != nil
+	hasFeatures := devConfig.Features != nil && len(devConfig.Features) > 0
+
+	if hasLifecycleCommands || hasFeatures {
 		// Load metadata for tracking lifecycle execution
 		metadata, err := LoadMetadata(containerID)
 		if err != nil {
@@ -808,32 +812,88 @@ func Run(config *RunConfig) error {
 
 		executor := NewLifecycleExecutor(dockerClient, containerID, devConfig.RemoteUser, config.Verbose, metadata)
 
+		// Resolve features and merge lifecycle commands if features exist
+		var mergedCommands map[string]*devcontainer.LifecycleCommand
+		if hasFeatures {
+			// Resolve features for lifecycle merging
+			resolver := devcontainer.NewFeatureResolver(filepath.Join(os.TempDir(), "packnplay-features-cache"))
+
+			var resolvedFeatures []*devcontainer.ResolvedFeature
+			for reference, options := range devConfig.Features {
+				// Convert options from map[string]interface{} if needed
+				optionsMap, ok := options.(map[string]interface{})
+				if !ok {
+					if config.Verbose {
+						fmt.Fprintf(os.Stderr, "Warning: skipping feature %s with invalid options type\n", reference)
+					}
+					continue
+				}
+
+				feature, err := resolver.ResolveFeature(reference, optionsMap)
+				if err != nil {
+					if config.Verbose {
+						fmt.Fprintf(os.Stderr, "Warning: failed to resolve feature %s for lifecycle: %v\n", reference, err)
+					}
+					continue
+				}
+				resolvedFeatures = append(resolvedFeatures, feature)
+			}
+
+			// Merge feature and user lifecycle commands
+			if len(resolvedFeatures) > 0 {
+				merger := devcontainer.NewLifecycleMerger()
+				userCommands := map[string]*devcontainer.LifecycleCommand{
+					"onCreateCommand":   devConfig.OnCreateCommand,
+					"postCreateCommand": devConfig.PostCreateCommand,
+					"postStartCommand":  devConfig.PostStartCommand,
+				}
+				mergedCommands = merger.MergeCommands(resolvedFeatures, userCommands)
+			}
+		}
+
+		// Use merged commands if available, otherwise use user commands directly
+		onCreateCmd := devConfig.OnCreateCommand
+		postCreateCmd := devConfig.PostCreateCommand
+		postStartCmd := devConfig.PostStartCommand
+
+		if mergedCommands != nil {
+			if cmd, exists := mergedCommands["onCreateCommand"]; exists {
+				onCreateCmd = cmd
+			}
+			if cmd, exists := mergedCommands["postCreateCommand"]; exists {
+				postCreateCmd = cmd
+			}
+			if cmd, exists := mergedCommands["postStartCommand"]; exists {
+				postStartCmd = cmd
+			}
+		}
+
 		// onCreateCommand - runs once on creation, re-runs if command changes
-		if devConfig.OnCreateCommand != nil {
+		if onCreateCmd != nil {
 			if config.Verbose {
 				fmt.Fprintf(os.Stderr, "Running onCreateCommand...\n")
 			}
-			if err := executor.Execute("onCreate", devConfig.OnCreateCommand); err != nil {
+			if err := executor.Execute("onCreate", onCreateCmd); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: onCreateCommand failed: %v\n", err)
 			}
 		}
 
 		// postCreateCommand - runs once after creation, re-runs if command changes
-		if devConfig.PostCreateCommand != nil {
+		if postCreateCmd != nil {
 			if config.Verbose {
 				fmt.Fprintf(os.Stderr, "Running postCreateCommand...\n")
 			}
-			if err := executor.Execute("postCreate", devConfig.PostCreateCommand); err != nil {
+			if err := executor.Execute("postCreate", postCreateCmd); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: postCreateCommand failed: %v\n", err)
 			}
 		}
 
 		// postStartCommand - runs every time container starts
-		if devConfig.PostStartCommand != nil {
+		if postStartCmd != nil {
 			if config.Verbose {
 				fmt.Fprintf(os.Stderr, "Running postStartCommand...\n")
 			}
-			if err := executor.Execute("postStart", devConfig.PostStartCommand); err != nil {
+			if err := executor.Execute("postStart", postStartCmd); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: postStartCommand failed: %v\n", err)
 			}
 		}
