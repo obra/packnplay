@@ -120,6 +120,9 @@ func TestGenerateMultiStageWithOCIFeatures(t *testing.T) {
 		t.Fatalf("Generate failed: %v", err)
 	}
 
+	// Print the generated Dockerfile for verification
+	t.Logf("Generated multi-stage Dockerfile:\n%s", dockerfile)
+
 	// Verify multi-stage build structure
 	if !strings.Contains(dockerfile, "FROM ubuntu:22.04 as base") {
 		t.Errorf("Dockerfile should have base stage with 'FROM ubuntu:22.04 as base'\nGot:\n%s", dockerfile)
@@ -136,5 +139,56 @@ func TestGenerateMultiStageWithOCIFeatures(t *testing.T) {
 	}
 	if !strings.Contains(dockerfile, "as base") {
 		t.Errorf("Dockerfile should have named base stage\nGot:\n%s", dockerfile)
+	}
+}
+
+func TestGenerateSingleStageWithLocalFeature(t *testing.T) {
+	// Create a local feature within the build context
+	tmpDir := t.TempDir()
+	buildContextPath := filepath.Join(tmpDir, ".devcontainer")
+	localFeatureDir := filepath.Join(buildContextPath, "local-features", "test-feature")
+	err := os.MkdirAll(localFeatureDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create local feature directory: %v", err)
+	}
+
+	// Create install script
+	installScript := "#!/bin/bash\necho 'Installing local feature'"
+	err = os.WriteFile(filepath.Join(localFeatureDir, "install.sh"), []byte(installScript), 0755)
+	if err != nil {
+		t.Fatalf("Failed to write install.sh: %v", err)
+	}
+
+	// Create feature with local path
+	localFeature := &devcontainer.ResolvedFeature{
+		ID:          "test-feature",
+		Version:     "1.0.0",
+		InstallPath: localFeatureDir,
+		Options:     map[string]interface{}{},
+	}
+
+	generator := NewDockerfileGenerator()
+	dockerfile, err := generator.Generate("ubuntu:22.04", "testuser", []*devcontainer.ResolvedFeature{localFeature}, buildContextPath)
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	t.Logf("Generated single-stage Dockerfile:\n%s", dockerfile)
+
+	// Verify single-stage build structure (no multi-stage)
+	if strings.Contains(dockerfile, "as feature-prep") {
+		t.Errorf("Local feature should use single-stage build, not multi-stage\nGot:\n%s", dockerfile)
+	}
+	if strings.Contains(dockerfile, "COPY --from=") {
+		t.Errorf("Single-stage build should not use COPY --from=\nGot:\n%s", dockerfile)
+	}
+	if !strings.Contains(dockerfile, "FROM ubuntu:22.04") {
+		t.Errorf("Dockerfile should have FROM statement")
+	}
+	if !strings.Contains(dockerfile, "USER root") {
+		t.Errorf("Dockerfile should switch to root for installation")
+	}
+	if !strings.Contains(dockerfile, "USER testuser") {
+		t.Errorf("Dockerfile should switch back to testuser")
 	}
 }
