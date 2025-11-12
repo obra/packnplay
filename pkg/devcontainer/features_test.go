@@ -71,3 +71,82 @@ func TestResolveLocalFeature(t *testing.T) {
 		t.Errorf("Expected option 'someOption' with value 'someValue', got %v", resolved.Options)
 	}
 }
+
+func TestResolveDependencies(t *testing.T) {
+	// Create temp directory for test features
+	tmpDir := t.TempDir()
+	cacheDir := filepath.Join(tmpDir, "cache")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatalf("Failed to create cache directory: %v", err)
+	}
+
+	// Create feature B (no dependencies)
+	featureBPath := filepath.Join(tmpDir, "feature-b")
+	if err := os.MkdirAll(featureBPath, 0755); err != nil {
+		t.Fatalf("Failed to create feature B directory: %v", err)
+	}
+	metadataB := map[string]interface{}{
+		"id":      "feature-b",
+		"version": "1.0.0",
+		"name":    "Feature B",
+	}
+	metadataBJSON, _ := json.Marshal(metadataB)
+	os.WriteFile(filepath.Join(featureBPath, "devcontainer-feature.json"), metadataBJSON, 0644)
+	os.WriteFile(filepath.Join(featureBPath, "install.sh"), []byte("#!/bin/bash\necho 'B'\n"), 0755)
+
+	// Create feature A (depends on feature-b)
+	featureAPath := filepath.Join(tmpDir, "feature-a")
+	if err := os.MkdirAll(featureAPath, 0755); err != nil {
+		t.Fatalf("Failed to create feature A directory: %v", err)
+	}
+	metadataA := map[string]interface{}{
+		"id":        "feature-a",
+		"version":   "1.0.0",
+		"name":      "Feature A",
+		"dependsOn": []string{"feature-b"},
+	}
+	metadataAJSON, _ := json.Marshal(metadataA)
+	os.WriteFile(filepath.Join(featureAPath, "devcontainer-feature.json"), metadataAJSON, 0644)
+	os.WriteFile(filepath.Join(featureAPath, "install.sh"), []byte("#!/bin/bash\necho 'A'\n"), 0755)
+
+	// Create feature C (installs after feature-a)
+	featureCPath := filepath.Join(tmpDir, "feature-c")
+	if err := os.MkdirAll(featureCPath, 0755); err != nil {
+		t.Fatalf("Failed to create feature C directory: %v", err)
+	}
+	metadataC := map[string]interface{}{
+		"id":            "feature-c",
+		"version":       "1.0.0",
+		"name":          "Feature C",
+		"installsAfter": []string{"feature-a"},
+	}
+	metadataCJSON, _ := json.Marshal(metadataC)
+	os.WriteFile(filepath.Join(featureCPath, "devcontainer-feature.json"), metadataCJSON, 0644)
+	os.WriteFile(filepath.Join(featureCPath, "install.sh"), []byte("#!/bin/bash\necho 'C'\n"), 0755)
+
+	// Create resolver and resolve features
+	resolver := NewFeatureResolver(cacheDir)
+	features := map[string]*ResolvedFeature{
+		"feature-a": {ID: "feature-a", InstallPath: featureAPath},
+		"feature-b": {ID: "feature-b", InstallPath: featureBPath},
+		"feature-c": {ID: "feature-c", InstallPath: featureCPath},
+	}
+
+	// Call ResolveFeatures
+	ordered, err := resolver.ResolveFeatures(features)
+	if err != nil {
+		t.Fatalf("Failed to resolve features: %v", err)
+	}
+
+	// Assert order is [feature-b, feature-a, feature-c]
+	expectedOrder := []string{"feature-b", "feature-a", "feature-c"}
+	if len(ordered) != len(expectedOrder) {
+		t.Fatalf("Expected %d features, got %d", len(expectedOrder), len(ordered))
+	}
+
+	for i, expected := range expectedOrder {
+		if ordered[i].ID != expected {
+			t.Errorf("Expected feature %d to be '%s', got '%s'", i, expected, ordered[i].ID)
+		}
+	}
+}
