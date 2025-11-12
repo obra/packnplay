@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // FeatureMetadata represents the metadata from devcontainer-feature.json
@@ -39,8 +41,84 @@ func NewFeatureResolver(cacheDir string) *FeatureResolver {
 	}
 }
 
+// isOCIReference checks if a feature reference is an OCI registry reference
+func isOCIReference(ref string) bool {
+	// OCI references contain : (for version) or start with registry domains
+	return strings.Contains(ref, "ghcr.io/") || strings.Contains(ref, "mcr.microsoft.com/")
+}
+
+// pullOCIFeature pulls an OCI feature to the cache directory
+func (r *FeatureResolver) pullOCIFeature(ociRef string) (string, error) {
+	// Create cache directory if it doesn't exist
+	if err := os.MkdirAll(r.cacheDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create cache directory: %w", err)
+	}
+
+	// Extract feature name for cache directory
+	// e.g., ghcr.io/devcontainers/features/common-utils:2 -> common-utils-2
+	parts := strings.Split(ociRef, "/")
+	lastPart := parts[len(parts)-1]
+	nameVersion := strings.ReplaceAll(lastPart, ":", "-")
+	featureCacheDir := filepath.Join(r.cacheDir, "oci-cache", nameVersion)
+
+	// Check if already cached
+	if _, err := os.Stat(filepath.Join(featureCacheDir, "install.sh")); err == nil {
+		return featureCacheDir, nil
+	}
+
+	// Create temporary directory for extraction
+	if err := os.MkdirAll(featureCacheDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create feature cache directory: %w", err)
+	}
+
+	// Use oras to pull the OCI artifact
+	cmd := exec.Command("oras", "pull", "--output", featureCacheDir, ociRef)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to pull OCI feature %s (is 'oras' installed?): %w\nOutput: %s", ociRef, err, string(output))
+	}
+
+	// Extract the tarball that oras downloaded
+	// Find the .tgz file in the cache directory
+	entries, err := os.ReadDir(featureCacheDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to read cache directory: %w", err)
+	}
+
+	var tarballPath string
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".tgz") || strings.HasSuffix(entry.Name(), ".tar.gz") {
+			tarballPath = filepath.Join(featureCacheDir, entry.Name())
+			break
+		}
+	}
+
+	if tarballPath == "" {
+		return "", fmt.Errorf("no tarball found in cache directory after OCI pull")
+	}
+
+	// Extract tarball to the cache directory
+	cmd = exec.Command("tar", "-xf", tarballPath, "-C", featureCacheDir)
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to extract tarball: %w", err)
+	}
+
+	// Remove the tarball after extraction
+	_ = os.Remove(tarballPath)
+
+	return featureCacheDir, nil
+}
+
 // ResolveFeature resolves a local feature from the given path with the specified options
 func (r *FeatureResolver) ResolveFeature(featurePath string, options map[string]interface{}) (*ResolvedFeature, error) {
+	// Check if this is an OCI reference
+	if isOCIReference(featurePath) {
+		cachedPath, err := r.pullOCIFeature(featurePath)
+		if err != nil {
+			return nil, err
+		}
+		featurePath = cachedPath
+	}
 	// Read metadata from devcontainer-feature.json if it exists
 	metadataPath := filepath.Join(featurePath, "devcontainer-feature.json")
 	metadataBytes, err := os.ReadFile(metadataPath)

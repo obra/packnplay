@@ -3,9 +3,26 @@ package devcontainer
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
+
+// skipIfNoDocker skips the test if Docker daemon is not available
+func skipIfNoDocker(t *testing.T) {
+	t.Helper()
+
+	// Skip if running in short mode
+	if testing.Short() {
+		t.Skip("Skipping test requiring Docker in short mode")
+	}
+
+	// Check if Docker is available
+	cmd := exec.Command("docker", "info")
+	if err := cmd.Run(); err != nil {
+		t.Skip("Skipping test: Docker not available")
+	}
+}
 
 func TestResolveLocalFeature(t *testing.T) {
 	// Create temp directory for test feature
@@ -148,5 +165,77 @@ func TestResolveDependencies(t *testing.T) {
 		if ordered[i].ID != expected {
 			t.Errorf("Expected feature %d to be '%s', got '%s'", i, expected, ordered[i].ID)
 		}
+	}
+}
+
+func TestResolveOCIFeature(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create temp cache directory
+	tmpDir := t.TempDir()
+	cacheDir := filepath.Join(tmpDir, "cache")
+
+	// Create resolver
+	resolver := NewFeatureResolver(cacheDir)
+
+	// Test resolving a real OCI feature from ghcr.io
+	// Using a small, well-known feature: ghcr.io/devcontainers/features/common-utils
+	ociRef := "ghcr.io/devcontainers/features/common-utils:2"
+	options := map[string]interface{}{
+		"installZsh": "true",
+	}
+
+	resolved, err := resolver.ResolveFeature(ociRef, options)
+	if err != nil {
+		t.Fatalf("Failed to resolve OCI feature: %v", err)
+	}
+
+	// Verify the resolved feature has expected properties
+	if resolved == nil {
+		t.Fatal("Expected resolved feature, got nil")
+	}
+
+	// Verify ID is set from metadata
+	if resolved.ID == "" {
+		t.Error("Expected ID to be set from feature metadata")
+	}
+
+	// Verify version is set
+	if resolved.Version == "" {
+		t.Error("Expected Version to be set from feature metadata")
+	}
+
+	// Verify InstallPath points to cached location
+	if resolved.InstallPath == "" {
+		t.Error("Expected InstallPath to be set")
+	}
+
+	// Verify the cached feature has required files
+	installScriptPath := filepath.Join(resolved.InstallPath, "install.sh")
+	if _, err := os.Stat(installScriptPath); os.IsNotExist(err) {
+		t.Errorf("Expected install.sh to exist at %s", installScriptPath)
+	}
+
+	metadataPath := filepath.Join(resolved.InstallPath, "devcontainer-feature.json")
+	if _, err := os.Stat(metadataPath); os.IsNotExist(err) {
+		t.Errorf("Expected devcontainer-feature.json to exist at %s", metadataPath)
+	}
+
+	// Verify options are preserved
+	if resolved.Options == nil {
+		t.Error("Expected Options to be set, got nil")
+	}
+	if val, ok := resolved.Options["installZsh"]; !ok || val != "true" {
+		t.Errorf("Expected option 'installZsh' with value 'true', got %v", resolved.Options)
+	}
+
+	// Test caching: resolving the same feature again should use cached version
+	resolved2, err := resolver.ResolveFeature(ociRef, options)
+	if err != nil {
+		t.Fatalf("Failed to resolve OCI feature (cached): %v", err)
+	}
+
+	if resolved2.InstallPath != resolved.InstallPath {
+		t.Errorf("Expected cached feature to have same InstallPath, got %s vs %s", resolved2.InstallPath, resolved.InstallPath)
 	}
 }
