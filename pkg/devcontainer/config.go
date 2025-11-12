@@ -16,9 +16,10 @@ type Config struct {
 	RemoteUser   string            `json:"remoteUser"`
 	ContainerEnv map[string]string `json:"containerEnv,omitempty"`
 	RemoteEnv    map[string]string `json:"remoteEnv,omitempty"`
-	ForwardPorts []interface{}     `json:"forwardPorts,omitempty"` // int or string
-	Mounts       []string          `json:"mounts,omitempty"`       // Docker mount syntax
-	RunArgs      []string          `json:"runArgs,omitempty"`      // Additional docker run arguments
+	ForwardPorts []interface{}          `json:"forwardPorts,omitempty"` // int or string
+	Mounts       []string               `json:"mounts,omitempty"`       // Docker mount syntax
+	RunArgs      []string               `json:"runArgs,omitempty"`      // Additional docker run arguments
+	Features     map[string]interface{} `json:"features,omitempty"`
 
 	// Lifecycle commands
 	OnCreateCommand   *LifecycleCommand `json:"onCreateCommand,omitempty"`

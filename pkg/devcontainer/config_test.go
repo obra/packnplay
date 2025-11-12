@@ -119,3 +119,45 @@ func TestConfig_MountsAndRunArgs(t *testing.T) {
 		})
 	}
 }
+
+func TestConfig_Features(t *testing.T) {
+	tests := []struct {
+		name         string
+		json         string
+		wantFeatures map[string]interface{}
+	}{
+		{
+			name: "features present",
+			json: `{
+				"image": "alpine:latest",
+				"features": {
+					"ghcr.io/devcontainers/features/node:1": {},
+					"ghcr.io/devcontainers/features/docker-in-docker:2": {
+						"version": "latest"
+					}
+				}
+			}`,
+			wantFeatures: map[string]interface{}{
+				"ghcr.io/devcontainers/features/node:1": map[string]interface{}{},
+				"ghcr.io/devcontainers/features/docker-in-docker:2": map[string]interface{}{
+					"version": "latest",
+				},
+			},
+		},
+		{
+			name:         "features absent",
+			json:         `{"image": "alpine:latest"}`,
+			wantFeatures: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var config Config
+			err := json.Unmarshal([]byte(tt.json), &config)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.wantFeatures, config.Features)
+		})
+	}
+}
