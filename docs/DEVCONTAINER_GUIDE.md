@@ -298,6 +298,98 @@ RunArgs support variable substitution:
 **Precedence:**
 runArgs are added before the image name in the `docker run` command, allowing you to pass any Docker CLI flags.
 
+### Features
+
+#### `features`
+Install pre-packaged development tools and configurations from community-maintained features.
+
+```json
+{
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "18"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "installOhMyZsh": true
+    }
+  }
+}
+```
+
+**Feature Syntax:**
+Features are referenced by their container registry path with semantic versioning:
+- `ghcr.io/devcontainers/features/<feature-name>:<major-version>`
+- Pin to major: `:1`, minor: `:1.0`, or patch: `:1.0.0`
+- Omit version for `:latest` tag
+
+**Common Community Features:**
+
+**Node.js (`node:1`):**
+```json
+{
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "18",
+      "nodeGypDependencies": true
+    }
+  }
+}
+```
+Installs Node.js, npm, and optionally build dependencies.
+
+**Docker-in-Docker (`docker-in-docker:2`):**
+```json
+{
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "moby": true
+    }
+  }
+}
+```
+Enables running Docker commands inside the container.
+
+**Common Utilities (`common-utils:2`):**
+```json
+{
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "installOhMyZsh": true,
+      "upgradePackages": true
+    }
+  }
+}
+```
+Installs common CLI tools, shells, and utilities.
+
+**Local Features:**
+Reference local feature directories:
+```json
+{
+  "features": {
+    "/path/to/local/feature": {},
+    "./local-feature": {}
+  }
+}
+```
+
+**Local Feature Structure:**
+```
+my-feature/
+├── devcontainer-feature.json  # Metadata
+└── install.sh                 # Installation script
+```
+
+**Feature Discovery:**
+Browse available features:
+- Official features: https://github.com/devcontainers/features
+- Community registry: https://containers.dev/features
+
 ### Variable Substitution
 
 Use variable substitution in `containerEnv`, `remoteEnv`, `mounts`, and `runArgs` values.
@@ -516,37 +608,33 @@ packnplay focuses on **core devcontainer functionality for AI coding agents** wh
 
 ### Out of Scope (VS Code-Specific)
 
-1. **`features`**: Devcontainer features are VS Code-specific and require complex installation system
-   - **Why**: Large implementation surface area, tightly coupled to VS Code
-   - **Alternative**: Use custom Dockerfile with pre-installed tools
-
-2. **`customizations`**: Editor-specific extensions and settings
+1. **`customizations`**: Editor-specific extensions and settings
    - **Why**: Editor-agnostic tool, not tied to VS Code
    - **Alternative**: Configure your editor separately
 
 ### Out of Scope (Security/Complexity)
 
-3. **`initializeCommand`**: Runs on host before container starts
+2. **`initializeCommand`**: Runs on host before container starts
    - **Why**: Security concern (arbitrary host code execution)
    - **Alternative**: Use shell scripts or Makefile on host
 
-4. **`updateContentCommand`**: Runs when container content changes
+3. **`updateContentCommand`**: Runs when container content changes
    - **Why**: Requires content change detection system
    - **Alternative**: Use `postCreateCommand` for one-time setup
 
-5. **`postAttachCommand`**: Runs after attaching to container
+4. **`postAttachCommand`**: Runs after attaching to container
    - **Why**: Requires attach detection infrastructure
    - **Alternative**: Run commands manually after attach
 
 ### Future Enhancements
 
-6. **Lifecycle command timeouts**: Commands don't timeout
+5. **Lifecycle command timeouts**: Commands don't timeout
    - **Status**: Future enhancement planned
    - **Alternative**: Use timeout command in shell: `timeout 60 npm install`
 
 ### Technical Limitations
 
-7. **Metadata per container**: Rebuilding image creates new container ID, new metadata
+6. **Metadata per container**: Rebuilding image creates new container ID, new metadata
    - **Impact**: Lifecycle commands re-run after rebuild
    - **Workaround**: None needed (expected behavior)
 
@@ -678,7 +766,7 @@ Packnplay implements a **subset** of the devcontainer specification:
 | `postCreateCommand` | ✅ | ✅ |
 | `postStartCommand` | ✅ | ✅ |
 | Variable substitution | ✅ (subset) | ✅ (full) |
-| `features` | ❌ | ✅ |
+| `features` | ✅ | ✅ |
 | `customizations` | ❌ | ✅ |
 
 Packnplay focuses on **core devcontainer functionality** for AI coding agents while maintaining compatibility with the specification.
