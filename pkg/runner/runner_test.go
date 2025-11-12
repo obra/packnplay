@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/obra/packnplay/pkg/config"
+	"github.com/obra/packnplay/pkg/devcontainer"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetOrCreateContainerCredentialFile(t *testing.T) {
@@ -120,4 +122,36 @@ func TestRunConfig(t *testing.T) {
 	if len(cfg.DefaultEnvVars) != 1 || cfg.DefaultEnvVars[0] != "ANTHROPIC_API_KEY" {
 		t.Errorf("RunConfig.DefaultEnvVars = %v, want [ANTHROPIC_API_KEY]", cfg.DefaultEnvVars)
 	}
+}
+
+func TestApplyFeatureContainerProperties(t *testing.T) {
+	// Test that features can contribute security options, capabilities, etc.
+	privilegedTrue := true
+	features := []*devcontainer.ResolvedFeature{
+		{
+			ID: "docker-feature",
+			Metadata: &devcontainer.FeatureMetadata{
+				Privileged:  &privilegedTrue,
+				CapAdd:      []string{"NET_ADMIN", "SYS_PTRACE"},
+				SecurityOpt: []string{"apparmor=unconfined"},
+				ContainerEnv: map[string]string{
+					"FEATURE_VAR": "feature-value",
+				},
+			},
+		},
+	}
+
+	applier := NewFeaturePropertiesApplier()
+	dockerArgs := []string{"run", "-d", "--name", "test"}
+
+	enhancedArgs, enhancedEnv := applier.ApplyFeatureProperties(dockerArgs, features, map[string]string{})
+
+	// Verify security properties added
+	assert.Contains(t, enhancedArgs, "--privileged")
+	assert.Contains(t, enhancedArgs, "--cap-add=NET_ADMIN")
+	assert.Contains(t, enhancedArgs, "--cap-add=SYS_PTRACE")
+	assert.Contains(t, enhancedArgs, "--security-opt=apparmor=unconfined")
+
+	// Verify environment variables added
+	assert.Equal(t, "feature-value", enhancedEnv["FEATURE_VAR"])
 }

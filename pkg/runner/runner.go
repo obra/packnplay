@@ -49,6 +49,55 @@ type ContainerDetails struct {
 	LaunchCommand string
 }
 
+// FeaturePropertiesApplier applies feature metadata to container configuration
+type FeaturePropertiesApplier struct{}
+
+// NewFeaturePropertiesApplier creates a new properties applicator
+func NewFeaturePropertiesApplier() *FeaturePropertiesApplier {
+	return &FeaturePropertiesApplier{}
+}
+
+// ApplyFeatureProperties applies feature container properties to Docker args and environment
+func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, features []*devcontainer.ResolvedFeature, baseEnv map[string]string) ([]string, map[string]string) {
+	enhancedArgs := make([]string, len(baseArgs))
+	copy(enhancedArgs, baseArgs)
+
+	enhancedEnv := make(map[string]string)
+	for k, v := range baseEnv {
+		enhancedEnv[k] = v
+	}
+
+	for _, feature := range features {
+		if feature.Metadata == nil {
+			continue
+		}
+
+		metadata := feature.Metadata
+
+		// Apply security properties
+		if metadata.Privileged != nil && *metadata.Privileged {
+			enhancedArgs = append(enhancedArgs, "--privileged")
+		}
+
+		for _, cap := range metadata.CapAdd {
+			enhancedArgs = append(enhancedArgs, "--cap-add="+cap)
+		}
+
+		for _, secOpt := range metadata.SecurityOpt {
+			enhancedArgs = append(enhancedArgs, "--security-opt="+secOpt)
+		}
+
+		// Apply feature environment variables
+		for key, value := range metadata.ContainerEnv {
+			enhancedEnv[key] = value
+		}
+
+		// TODO: Apply feature-contributed mounts (Task 6)
+	}
+
+	return enhancedArgs, enhancedEnv
+}
+
 // getTTYFlags returns appropriate TTY flags for docker commands
 // Returns either ["-it"] if we have a TTY, or ["-i"] if we don't
 func getTTYFlags() []string {
@@ -734,6 +783,51 @@ func Run(config *RunConfig) error {
 
 		// Add to Docker run command
 		args = append(args, substitutedArg)
+	}
+
+	// Apply feature-contributed container properties (security options, capabilities, etc.)
+	if devConfig.Features != nil && len(devConfig.Features) > 0 {
+		// Resolve features for properties application
+		resolver := devcontainer.NewFeatureResolver(filepath.Join(os.TempDir(), "packnplay-features-cache"))
+
+		var resolvedFeatures []*devcontainer.ResolvedFeature
+		for reference, options := range devConfig.Features {
+			// Convert options from map[string]interface{} if needed
+			optionsMap, ok := options.(map[string]interface{})
+			if !ok {
+				if config.Verbose {
+					fmt.Fprintf(os.Stderr, "Warning: invalid options format for feature %s\n", reference)
+				}
+				continue
+			}
+
+			feature, err := resolver.ResolveFeature(reference, optionsMap)
+			if err != nil {
+				if config.Verbose {
+					fmt.Fprintf(os.Stderr, "Warning: failed to resolve feature %s for properties: %v\n", reference, err)
+				}
+				continue
+			}
+			resolvedFeatures = append(resolvedFeatures, feature)
+		}
+
+		// Apply feature container properties if we successfully resolved features
+		if len(resolvedFeatures) > 0 {
+			applier := NewFeaturePropertiesApplier()
+
+			// Collect current environment variables that have been added to args
+			currentEnv := make(map[string]string)
+
+			// Apply feature properties
+			var enhancedEnv map[string]string
+			args, enhancedEnv = applier.ApplyFeatureProperties(args, resolvedFeatures, currentEnv)
+
+			// Add feature-contributed environment variables to docker args
+			// These go after devcontainer env but can still be overridden by user --env flags
+			for k, v := range enhancedEnv {
+				args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
+			}
+		}
 	}
 
 	// Add image
