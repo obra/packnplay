@@ -91,7 +91,11 @@ func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, fea
 		// not as runtime environment variables. This allows variable references like
 		// ${PATH} to be properly resolved inside the container.
 
-		// TODO: Apply feature-contributed mounts (Task 6)
+		// Apply feature-contributed mounts
+		for _, mount := range metadata.Mounts {
+			mountArg := "--mount=type=" + mount.Type + ",source=" + mount.Source + ",target=" + mount.Target
+			enhancedArgs = append(enhancedArgs, mountArg)
+		}
 	}
 
 	return enhancedArgs, enhancedEnv
@@ -785,7 +789,7 @@ func Run(config *RunConfig) error {
 	}
 
 	// Apply feature-contributed container properties (security options, capabilities, etc.)
-	if devConfig.Features != nil && len(devConfig.Features) > 0 {
+	if len(devConfig.Features) > 0 {
 		// Resolve features for properties application
 		resolver := devcontainer.NewFeatureResolver(filepath.Join(os.TempDir(), "packnplay-features-cache"))
 
@@ -892,7 +896,7 @@ func Run(config *RunConfig) error {
 	// Commands are tracked: onCreate/postCreate run once, postStart always runs
 	// Feature lifecycle commands execute before user commands per specification
 	hasLifecycleCommands := devConfig.OnCreateCommand != nil || devConfig.PostCreateCommand != nil || devConfig.PostStartCommand != nil
-	hasFeatures := devConfig.Features != nil && len(devConfig.Features) > 0
+	hasFeatures := len(devConfig.Features) > 0
 
 	if hasLifecycleCommands || hasFeatures {
 		// Load metadata for tracking lifecycle execution

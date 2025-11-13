@@ -155,3 +155,35 @@ func TestApplyFeatureContainerProperties(t *testing.T) {
 	// Verify environment variables added
 	assert.Equal(t, "feature-value", enhancedEnv["FEATURE_VAR"])
 }
+
+func TestApplyFeatureMounts(t *testing.T) {
+	// Test that features can contribute mounts
+	features := []*devcontainer.ResolvedFeature{
+		{
+			ID: "docker-feature",
+			Metadata: &devcontainer.FeatureMetadata{
+				Mounts: []devcontainer.Mount{
+					{
+						Source: "/var/run/docker.sock",
+						Target: "/var/run/docker.sock",
+						Type:   "bind",
+					},
+					{
+						Source: "my-volume",
+						Target: "/data",
+						Type:   "volume",
+					},
+				},
+			},
+		},
+	}
+
+	applier := NewFeaturePropertiesApplier()
+	dockerArgs := []string{"run", "-d", "--name", "test"}
+
+	enhancedArgs, _ := applier.ApplyFeatureProperties(dockerArgs, features, map[string]string{})
+
+	// Verify mounts added with correct Docker mount syntax
+	assert.Contains(t, enhancedArgs, "--mount=type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock")
+	assert.Contains(t, enhancedArgs, "--mount=type=volume,source=my-volume,target=/data")
+}
