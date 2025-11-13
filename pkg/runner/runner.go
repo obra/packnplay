@@ -58,7 +58,8 @@ func NewFeaturePropertiesApplier() *FeaturePropertiesApplier {
 }
 
 // ApplyFeatureProperties applies feature container properties to Docker args and environment
-func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, features []*devcontainer.ResolvedFeature, baseEnv map[string]string) ([]string, map[string]string) {
+// ctx parameter added for variable substitution in mount strings
+func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, features []*devcontainer.ResolvedFeature, baseEnv map[string]string, ctx *devcontainer.SubstituteContext) ([]string, map[string]string) {
 	enhancedArgs := make([]string, len(baseArgs))
 	copy(enhancedArgs, baseArgs)
 
@@ -73,6 +74,7 @@ func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, fea
 		}
 
 		metadata := feature.Metadata
+
 
 		// Apply security properties
 		if metadata.Privileged != nil && *metadata.Privileged {
@@ -97,13 +99,20 @@ func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, fea
 			enhancedArgs = append(enhancedArgs, "--entrypoint="+strings.Join(metadata.Entrypoint, " "))
 		}
 
-		// NOTE: ContainerEnv from features is set in the Dockerfile as ENV statements,
-		// not as runtime environment variables. This allows variable references like
-		// ${PATH} to be properly resolved inside the container.
+		// Apply feature environment variables (for runtime context)
+		// NOTE: ContainerEnv from features is ALSO set in the Dockerfile as ENV statements,
+		// but we return them here for runtime environment context
+		for key, value := range metadata.ContainerEnv {
+			enhancedEnv[key] = value
+		}
 
-		// Apply feature-contributed mounts
+		// Apply feature-contributed mounts with variable substitution
 		for _, mount := range metadata.Mounts {
-			mountArg := "--mount=type=" + mount.Type + ",source=" + mount.Source + ",target=" + mount.Target
+			// Apply variable substitution to mount source and target
+			source := devcontainer.Substitute(ctx, mount.Source).(string)
+			target := devcontainer.Substitute(ctx, mount.Target).(string)
+
+			mountArg := "--mount=type=" + mount.Type + ",source=" + source + ",target=" + target
 			enhancedArgs = append(enhancedArgs, mountArg)
 		}
 	}
@@ -828,12 +837,21 @@ func Run(config *RunConfig) error {
 		if len(resolvedFeatures) > 0 {
 			applier := NewFeaturePropertiesApplier()
 
+			// Create substitution context for feature mount variable resolution
+			ctx := &devcontainer.SubstituteContext{
+				LocalWorkspaceFolder:     mountPath,
+				ContainerWorkspaceFolder: mountPath,
+				LocalEnv:                 getLocalEnvMap(),
+				ContainerEnv:             make(map[string]string),
+				Labels:                   labels,
+			}
+
 			// Collect current environment variables that have been added to args
 			currentEnv := make(map[string]string)
 
-			// Apply feature properties
+			// Apply feature properties with variable substitution
 			var enhancedEnv map[string]string
-			args, enhancedEnv = applier.ApplyFeatureProperties(args, resolvedFeatures, currentEnv)
+			args, enhancedEnv = applier.ApplyFeatureProperties(args, resolvedFeatures, currentEnv, ctx)
 
 			// Add feature-contributed environment variables to docker args
 			// These go after devcontainer env but can still be overridden by user --env flags
