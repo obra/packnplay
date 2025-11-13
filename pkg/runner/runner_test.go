@@ -187,3 +187,27 @@ func TestApplyFeatureMounts(t *testing.T) {
 	assert.Contains(t, enhancedArgs, "--mount=type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock")
 	assert.Contains(t, enhancedArgs, "--mount=type=volume,source=my-volume,target=/data")
 }
+
+func TestApplyFeatureInitAndEntrypoint(t *testing.T) {
+	// Test that features can set init and entrypoint
+	initTrue := true
+	features := []*devcontainer.ResolvedFeature{
+		{
+			ID: "init-feature",
+			Metadata: &devcontainer.FeatureMetadata{
+				Init:       &initTrue,
+				Entrypoint: []string{"/custom.sh"},
+			},
+		},
+	}
+
+	applier := NewFeaturePropertiesApplier()
+	dockerArgs := []string{"run", "-d", "--name", "test"}
+
+	enhancedArgs, _ := applier.ApplyFeatureProperties(dockerArgs, features, map[string]string{})
+
+	// Verify init flag added
+	assert.Contains(t, enhancedArgs, "--init")
+	// Verify entrypoint flag added
+	assert.Contains(t, enhancedArgs, "--entrypoint=/custom.sh")
+}

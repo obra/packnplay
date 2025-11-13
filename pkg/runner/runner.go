@@ -87,6 +87,16 @@ func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, fea
 			enhancedArgs = append(enhancedArgs, "--security-opt="+secOpt)
 		}
 
+		// Apply init flag
+		if metadata.Init != nil && *metadata.Init {
+			enhancedArgs = append(enhancedArgs, "--init")
+		}
+
+		// Apply entrypoint
+		if len(metadata.Entrypoint) > 0 {
+			enhancedArgs = append(enhancedArgs, "--entrypoint="+strings.Join(metadata.Entrypoint, " "))
+		}
+
 		// NOTE: ContainerEnv from features is set in the Dockerfile as ENV statements,
 		// not as runtime environment variables. This allows variable references like
 		// ${PATH} to be properly resolved inside the container.
