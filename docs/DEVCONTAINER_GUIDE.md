@@ -474,6 +474,45 @@ Features can contribute container configuration properties that are merged into 
 
 These properties are automatically applied when the feature is used.
 
+#### Complete Specification Support
+
+packnplay supports 100% of the devcontainer features specification:
+- **Feature options with validation**: Options defined in `devcontainer-feature.json` are automatically converted to environment variables with proper type validation (string, boolean, enum)
+- **All lifecycle hooks**: Features can contribute `onCreateCommand`, `postCreateCommand`, and `postStartCommand` that execute before user commands
+- **Container properties**: Features can configure security settings (`privileged`, `capAdd`, `securityOpt`), environment variables, mounts, and init systems
+- **VS Code compatibility**: Full interoperability with VS Code devcontainers specification
+
+**Example - Multi-Feature Configuration:**
+```json
+{
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "18",
+      "nodeGypDependencies": true
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "moby": true
+    },
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "installOhMyZsh": true,
+      "upgradePackages": true
+    }
+  },
+  "postCreateCommand": "npm install",
+  "postStartCommand": "npm run dev"
+}
+```
+
+This configuration:
+1. Installs Node.js 18 with build dependencies
+2. Enables Docker-in-Docker with Moby engine
+3. Installs Zsh with Oh My Zsh
+4. Runs all feature lifecycle hooks before user commands
+5. Applies all feature container properties automatically
+
 ### Variable Substitution
 
 Use variable substitution in `containerEnv`, `remoteEnv`, `mounts`, and `runArgs` values.
