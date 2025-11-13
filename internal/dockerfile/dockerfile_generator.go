@@ -68,7 +68,12 @@ func (g *DockerfileGenerator) generateMultiStage(baseImage string, features []*d
 
 	// Stage 2: Base image with features
 	sb.WriteString(fmt.Sprintf("FROM %s as base\n", baseImage))
-	sb.WriteString("USER root\n\n")
+	sb.WriteString("USER root\n")
+
+	// Add user context environment variables
+	sb.WriteString(fmt.Sprintf("ENV _REMOTE_USER=%s\n", remoteUser))
+	sb.WriteString(fmt.Sprintf("ENV _REMOTE_USER_HOME=/home/%s\n", remoteUser))
+	sb.WriteString(fmt.Sprintf("ENV _CONTAINER_USER=%s\n\n", remoteUser))
 
 	// Copy features from prep stage
 	sb.WriteString("# Copy features from prep stage\n")
@@ -115,7 +120,12 @@ func (g *DockerfileGenerator) generateSingleStage(baseImage string, features []*
 	sb.WriteString(fmt.Sprintf("FROM %s\n\n", baseImage))
 
 	// Switch to root for installation
-	sb.WriteString("USER root\n\n")
+	sb.WriteString("USER root\n")
+
+	// Add user context environment variables
+	sb.WriteString(fmt.Sprintf("ENV _REMOTE_USER=%s\n", remoteUser))
+	sb.WriteString(fmt.Sprintf("ENV _REMOTE_USER_HOME=/home/%s\n", remoteUser))
+	sb.WriteString(fmt.Sprintf("ENV _CONTAINER_USER=%s\n\n", remoteUser))
 
 	// Install features
 	processor := devcontainer.NewFeatureOptionsProcessor()

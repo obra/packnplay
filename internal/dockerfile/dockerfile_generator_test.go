@@ -192,3 +192,97 @@ func TestGenerateSingleStageWithLocalFeature(t *testing.T) {
 		t.Errorf("Dockerfile should switch back to testuser")
 	}
 }
+
+func TestFeatureUserContextVariables(t *testing.T) {
+	tests := []struct {
+		name           string
+		remoteUser     string
+		useMultiStage  bool
+		expectedEnvs   []string
+	}{
+		{
+			name:          "single stage with vscode user",
+			remoteUser:    "vscode",
+			useMultiStage: false,
+			expectedEnvs: []string{
+				"ENV _REMOTE_USER=vscode",
+				"ENV _REMOTE_USER_HOME=/home/vscode",
+				"ENV _CONTAINER_USER=vscode",
+			},
+		},
+		{
+			name:          "multi stage with custom user",
+			remoteUser:    "developer",
+			useMultiStage: true,
+			expectedEnvs: []string{
+				"ENV _REMOTE_USER=developer",
+				"ENV _REMOTE_USER_HOME=/home/developer",
+				"ENV _CONTAINER_USER=developer",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			buildContextPath := filepath.Join(tmpDir, ".devcontainer")
+
+			var featureDir string
+			if tt.useMultiStage {
+				// OCI feature (outside build context for multi-stage)
+				featureDir = filepath.Join(tmpDir, "oci-cache", "test-feature")
+			} else {
+				// Local feature (inside build context for single-stage)
+				featureDir = filepath.Join(buildContextPath, "local-features", "test-feature")
+			}
+
+			err := os.MkdirAll(featureDir, 0755)
+			if err != nil {
+				t.Fatalf("Failed to create feature directory: %v", err)
+			}
+
+			// Create install script
+			installScript := "#!/bin/bash\necho 'Installing test feature'"
+			err = os.WriteFile(filepath.Join(featureDir, "install.sh"), []byte(installScript), 0755)
+			if err != nil {
+				t.Fatalf("Failed to write install.sh: %v", err)
+			}
+
+			// Create feature
+			feature := &devcontainer.ResolvedFeature{
+				ID:          "test-feature",
+				Version:     "1.0.0",
+				InstallPath: featureDir,
+				Options:     map[string]interface{}{},
+			}
+
+			generator := NewDockerfileGenerator()
+			dockerfile, err := generator.Generate("ubuntu:22.04", tt.remoteUser, []*devcontainer.ResolvedFeature{feature}, buildContextPath)
+			if err != nil {
+				t.Fatalf("Generate failed: %v", err)
+			}
+
+			t.Logf("Generated Dockerfile:\n%s", dockerfile)
+
+			// Verify all expected environment variables are present
+			for _, expectedEnv := range tt.expectedEnvs {
+				if !strings.Contains(dockerfile, expectedEnv) {
+					t.Errorf("Dockerfile missing expected environment variable: %s\nGot:\n%s", expectedEnv, dockerfile)
+				}
+			}
+
+			// Verify env vars come after USER root
+			userRootIdx := strings.Index(dockerfile, "USER root")
+			if userRootIdx == -1 {
+				t.Fatalf("Dockerfile missing USER root statement")
+			}
+
+			for _, expectedEnv := range tt.expectedEnvs {
+				envIdx := strings.Index(dockerfile, expectedEnv)
+				if envIdx != -1 && envIdx < userRootIdx {
+					t.Errorf("Environment variable %s should come after USER root", expectedEnv)
+				}
+			}
+		})
+	}
+}
