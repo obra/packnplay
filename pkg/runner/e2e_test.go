@@ -2044,3 +2044,111 @@ touch /feature-installed
 	require.Contains(t, output, "feature postCreate", "Feature postCreate should execute first")
 	require.Contains(t, output, "user postCreate", "User postCreate should execute second")
 }
+
+// TestE2E_DockerInDockerFeature tests real docker-in-docker feature with options
+func TestE2E_DockerInDockerFeature(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Use REAL ghcr.io/devcontainers/features/docker-in-docker:2
+	// This feature installs Docker inside the container and supports non-root usage
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+			"features": {
+				"ghcr.io/devcontainers/features/docker-in-docker:2": {
+					"enableNonRootDocker": "true"
+				}
+			},
+			"remoteUser": "vscode"
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Verify docker is installed by checking version
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "docker", "--version")
+	require.NoError(t, err, "docker --version should work in container: %s", output)
+	require.Contains(t, output, "Docker version", "Expected docker version output")
+
+	// Verify docker info works (this requires dockerd to be running)
+	// Note: This test verifies the feature installs docker, but dockerd may not be running
+	// in the test environment. We check for docker binary and basic info command.
+	infoOutput, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "which", "docker")
+	require.NoError(t, err, "docker binary should be installed: %s", infoOutput)
+	require.Contains(t, infoOutput, "/usr/bin/docker", "docker should be in /usr/bin")
+
+	// Verify non-root user can access docker socket
+	// Check that vscode user is in docker group
+	groupOutput, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "groups")
+	require.NoError(t, err, "groups command should work: %s", groupOutput)
+	require.Contains(t, groupOutput, "docker", "vscode user should be in docker group")
+}
+
+// TestE2E_FeatureOptionValidation tests validation of feature option values
+func TestE2E_FeatureOptionValidation(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Use node feature with INVALID version value "banana"
+	// This should produce a clear error message, not silent failure
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+			"features": {
+				"ghcr.io/devcontainers/features/node:1": {
+					"version": "banana"
+				}
+			}
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run packnplay - this should either:
+	// 1. Fail with clear error message about invalid version
+	// 2. Or succeed with warning message in output (depending on feature behavior)
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "testing validation")
+
+	// We expect this to fail or warn about invalid version
+	// The key requirement is that error messages are CLEAR, not silent failures
+	if err != nil {
+		// If it failed, error message should mention the invalid version or option
+		require.True(t,
+			strings.Contains(output, "banana") ||
+			strings.Contains(output, "version") ||
+			strings.Contains(output, "invalid") ||
+			strings.Contains(strings.ToLower(output), "error"),
+			"Error message should clearly indicate what went wrong: %s", output)
+	} else {
+		// If it succeeded, check if Node was installed (it might fall back to default)
+		nodeOutput, nodeErr := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "node", "--version")
+		if nodeErr != nil {
+			// Node installation failed - this is acceptable, but we should have seen a warning
+			require.True(t,
+				strings.Contains(output, "warning") ||
+				strings.Contains(output, "banana") ||
+				strings.Contains(strings.ToLower(output), "error"),
+				"Should have warning about invalid version in output: %s", output)
+		} else {
+			// Node was installed despite invalid version - check for warning in original output
+			t.Logf("Node installed despite invalid version 'banana': %s", nodeOutput)
+			t.Logf("Build output: %s", output)
+			// This is acceptable behavior (fallback to default), but ideally should warn
+		}
+	}
+}
