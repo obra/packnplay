@@ -295,6 +295,64 @@ func NewFeatureOptionsProcessor() *FeatureOptionsProcessor {
 	return &FeatureOptionsProcessor{}
 }
 
+// ValidateAndProcessOptions validates feature options and converts to environment variables
+func (p *FeatureOptionsProcessor) ValidateAndProcessOptions(userOptions map[string]interface{}, optionSpecs map[string]OptionSpec) (map[string]string, error) {
+	// First validate all user-provided options
+	for optionName, userValue := range userOptions {
+		spec, exists := optionSpecs[optionName]
+		if !exists {
+			// Option not in spec - skip validation
+			continue
+		}
+
+		if err := p.validateOptionValue(optionName, userValue, spec); err != nil {
+			return nil, err
+		}
+	}
+
+	// Then process options (apply defaults, convert to env vars)
+	return p.ProcessOptions(userOptions, optionSpecs), nil
+}
+
+// validateOptionValue validates a single option value against its spec
+func (p *FeatureOptionsProcessor) validateOptionValue(optionName string, value interface{}, spec OptionSpec) error {
+	// Validate type
+	switch spec.Type {
+	case "string":
+		if _, ok := value.(string); !ok {
+			return fmt.Errorf("option '%s' must be of type string", optionName)
+		}
+		// Validate enum (proposals)
+		if len(spec.Proposals) > 0 {
+			strValue := value.(string)
+			valid := false
+			for _, proposal := range spec.Proposals {
+				if strValue == proposal {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				return fmt.Errorf("option '%s' value '%s' must be one of: %v", optionName, strValue, spec.Proposals)
+			}
+		}
+	case "boolean":
+		if _, ok := value.(bool); !ok {
+			return fmt.Errorf("option '%s' must be of type boolean", optionName)
+		}
+	case "number":
+		// Accept int, int64, float64
+		switch value.(type) {
+		case int, int64, float64:
+			// Valid number types
+		default:
+			return fmt.Errorf("option '%s' must be of type number", optionName)
+		}
+	}
+
+	return nil
+}
+
 // ProcessOptions converts feature options to environment variables per specification
 func (p *FeatureOptionsProcessor) ProcessOptions(userOptions map[string]interface{}, optionSpecs map[string]OptionSpec) map[string]string {
 	result := make(map[string]string)

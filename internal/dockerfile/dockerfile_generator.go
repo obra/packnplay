@@ -86,7 +86,10 @@ func (g *DockerfileGenerator) generateMultiStage(baseImage string, features []*d
 
 		// Add environment variables from options
 		if feature.Metadata != nil && feature.Metadata.Options != nil {
-			envVars := processor.ProcessOptions(feature.Options, feature.Metadata.Options)
+			envVars, err := processor.ValidateAndProcessOptions(feature.Options, feature.Metadata.Options)
+			if err != nil {
+				return "", fmt.Errorf("invalid options for feature %s: %w", feature.ID, err)
+			}
 			for envName, envValue := range envVars {
 				sb.WriteString(fmt.Sprintf("ENV %s=%s\n", envName, envValue))
 			}
@@ -134,7 +137,10 @@ func (g *DockerfileGenerator) generateSingleStage(baseImage string, features []*
 
 		// Process feature options to environment variables
 		if feature.Metadata != nil && feature.Metadata.Options != nil {
-			envVars := processor.ProcessOptions(feature.Options, feature.Metadata.Options)
+			envVars, err := processor.ValidateAndProcessOptions(feature.Options, feature.Metadata.Options)
+			if err != nil {
+				return "", fmt.Errorf("invalid options for feature %s: %w", feature.ID, err)
+			}
 			for envName, envValue := range envVars {
 				sb.WriteString(fmt.Sprintf("ENV %s=%s\n", envName, envValue))
 			}

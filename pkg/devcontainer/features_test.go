@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -418,5 +419,129 @@ func TestParseCompleteFeatureMetadata(t *testing.T) {
 	}
 	if len(resolved.Metadata.DependsOn) != 1 || resolved.Metadata.DependsOn[0] != "base-feature" {
 		t.Errorf("Expected DependsOn=['base-feature'], got %v", resolved.Metadata.DependsOn)
+	}
+}
+
+func TestValidateFeatureOptions(t *testing.T) {
+	tests := []struct {
+		name        string
+		options     map[string]interface{}
+		optionSpecs map[string]OptionSpec
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name: "valid string option",
+			options: map[string]interface{}{
+				"version": "18.20.0",
+			},
+			optionSpecs: map[string]OptionSpec{
+				"version": {Type: "string", Default: "latest"},
+			},
+			expectError: false,
+		},
+		{
+			name: "invalid type - number for string",
+			options: map[string]interface{}{
+				"version": 123,
+			},
+			optionSpecs: map[string]OptionSpec{
+				"version": {Type: "string", Default: "latest"},
+			},
+			expectError: true,
+			errorMsg:    "option 'version' must be of type string",
+		},
+		{
+			name: "valid boolean option",
+			options: map[string]interface{}{
+				"enabled": true,
+			},
+			optionSpecs: map[string]OptionSpec{
+				"enabled": {Type: "boolean", Default: false},
+			},
+			expectError: false,
+		},
+		{
+			name: "invalid type - string for boolean",
+			options: map[string]interface{}{
+				"enabled": "true",
+			},
+			optionSpecs: map[string]OptionSpec{
+				"enabled": {Type: "boolean", Default: false},
+			},
+			expectError: true,
+			errorMsg:    "option 'enabled' must be of type boolean",
+		},
+		{
+			name: "valid enum value",
+			options: map[string]interface{}{
+				"installType": "nvm",
+			},
+			optionSpecs: map[string]OptionSpec{
+				"installType": {Type: "string", Proposals: []string{"apt", "nvm", "source"}},
+			},
+			expectError: false,
+		},
+		{
+			name: "invalid enum value",
+			options: map[string]interface{}{
+				"installType": "invalid",
+			},
+			optionSpecs: map[string]OptionSpec{
+				"installType": {Type: "string", Proposals: []string{"apt", "nvm", "source"}},
+			},
+			expectError: true,
+			errorMsg:    "option 'installType' value 'invalid' must be one of: [apt nvm source]",
+		},
+		{
+			name: "valid number option - int",
+			options: map[string]interface{}{
+				"port": 8080,
+			},
+			optionSpecs: map[string]OptionSpec{
+				"port": {Type: "number", Default: 3000},
+			},
+			expectError: false,
+		},
+		{
+			name: "valid number option - float",
+			options: map[string]interface{}{
+				"ratio": 1.5,
+			},
+			optionSpecs: map[string]OptionSpec{
+				"ratio": {Type: "number", Default: 1.0},
+			},
+			expectError: false,
+		},
+		{
+			name: "invalid type - string for number",
+			options: map[string]interface{}{
+				"port": "8080",
+			},
+			optionSpecs: map[string]OptionSpec{
+				"port": {Type: "number", Default: 3000},
+			},
+			expectError: true,
+			errorMsg:    "option 'port' must be of type number",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			processor := NewFeatureOptionsProcessor()
+			_, err := processor.ValidateAndProcessOptions(tt.options, tt.optionSpecs)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error but got nil")
+				} else if !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("Expected error containing '%s', got '%s'", tt.errorMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error but got: %v", err)
+				}
+			}
+		})
 	}
 }
