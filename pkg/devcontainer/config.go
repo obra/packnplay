@@ -10,9 +10,11 @@ import (
 
 // Config represents a parsed devcontainer.json
 type Config struct {
+	// Basic container configuration
 	Image        string                 `json:"image"`
 	DockerFile   string                 `json:"dockerFile"`
 	Build        *BuildConfig           `json:"build,omitempty"`
+	Name         string                 `json:"name,omitempty"`          // Display name for the dev container
 	RemoteUser   string                 `json:"remoteUser"`
 	ContainerEnv map[string]string      `json:"containerEnv,omitempty"`
 	RemoteEnv    map[string]string      `json:"remoteEnv,omitempty"`
@@ -21,12 +23,20 @@ type Config struct {
 	RunArgs      []string               `json:"runArgs,omitempty"`      // Additional docker run arguments
 	Features     map[string]interface{} `json:"features,omitempty"`
 
-	// Lifecycle commands
+	// Workspace configuration - CRITICAL for proper workspace setup
+	WorkspaceFolder string `json:"workspaceFolder,omitempty"` // Path inside container where workspace should be
+	WorkspaceMount  string `json:"workspaceMount,omitempty"`  // Custom mount string for workspace
+
+	// Lifecycle commands - complete Microsoft specification
+	InitializeCommand    *LifecycleCommand `json:"initializeCommand,omitempty"`    // Runs on host before container creation
 	OnCreateCommand      *LifecycleCommand `json:"onCreateCommand,omitempty"`
+	UpdateContentCommand *LifecycleCommand `json:"updateContentCommand,omitempty"`
 	PostCreateCommand    *LifecycleCommand `json:"postCreateCommand,omitempty"`
 	PostStartCommand     *LifecycleCommand `json:"postStartCommand,omitempty"`
-	UpdateContentCommand *LifecycleCommand `json:"updateContentCommand,omitempty"`
-	PostAttachCommand    *LifecycleCommand `json:"postAttachCommand,omitempty"`
+	PostAttachCommand    *LifecycleCommand `json:"postAttachCommand,omitempty"`   // Runs every time IDE attaches
+
+	// Lifecycle control
+	WaitFor string `json:"waitFor,omitempty"` // Which lifecycle command to wait for before setup is complete
 }
 
 // LoadConfig loads and parses .devcontainer/devcontainer.json if it exists

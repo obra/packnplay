@@ -55,9 +55,83 @@ type FeatureMetadata struct {
 	PostStartCommand     *LifecycleCommand `json:"postStartCommand,omitempty"`
 	PostAttachCommand    *LifecycleCommand `json:"postAttachCommand,omitempty"`
 
-	// Dependencies
-	DependsOn     []string `json:"dependsOn,omitempty"`
-	InstallsAfter []string `json:"installsAfter,omitempty"`
+	// Dependencies - Microsoft spec compliance
+	DependsOn     map[string]interface{} `json:"dependsOn,omitempty"`     // Feature IDs mapping to options
+	InstallsAfter []string               `json:"installsAfter,omitempty"` // Simple feature ID list
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling to handle both string and array formats for entrypoint
+func (f *FeatureMetadata) UnmarshalJSON(data []byte) error {
+	// Create a temporary struct with Entrypoint removed to avoid infinite recursion
+	type Alias struct {
+		ID                   string                `json:"id"`
+		Version              string                `json:"version"`
+		Name                 string                `json:"name"`
+		Description          string                `json:"description,omitempty"`
+		Options              map[string]OptionSpec `json:"options,omitempty"`
+		ContainerEnv         map[string]string     `json:"containerEnv,omitempty"`
+		Privileged           *bool                 `json:"privileged,omitempty"`
+		Init                 *bool                 `json:"init,omitempty"`
+		CapAdd               []string              `json:"capAdd,omitempty"`
+		SecurityOpt          []string              `json:"securityOpt,omitempty"`
+		Mounts               []Mount               `json:"mounts,omitempty"`
+		OnCreateCommand      *LifecycleCommand     `json:"onCreateCommand,omitempty"`
+		UpdateContentCommand *LifecycleCommand     `json:"updateContentCommand,omitempty"`
+		PostCreateCommand    *LifecycleCommand     `json:"postCreateCommand,omitempty"`
+		PostStartCommand     *LifecycleCommand     `json:"postStartCommand,omitempty"`
+		PostAttachCommand    *LifecycleCommand     `json:"postAttachCommand,omitempty"`
+		DependsOn            map[string]interface{} `json:"dependsOn,omitempty"`
+		InstallsAfter        []string              `json:"installsAfter,omitempty"`
+	}
+
+	var aux Alias
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Copy all fields except entrypoint
+	f.ID = aux.ID
+	f.Version = aux.Version
+	f.Name = aux.Name
+	f.Description = aux.Description
+	f.Options = aux.Options
+	f.ContainerEnv = aux.ContainerEnv
+	f.Privileged = aux.Privileged
+	f.Init = aux.Init
+	f.CapAdd = aux.CapAdd
+	f.SecurityOpt = aux.SecurityOpt
+	f.Mounts = aux.Mounts
+	f.OnCreateCommand = aux.OnCreateCommand
+	f.UpdateContentCommand = aux.UpdateContentCommand
+	f.PostCreateCommand = aux.PostCreateCommand
+	f.PostStartCommand = aux.PostStartCommand
+	f.PostAttachCommand = aux.PostAttachCommand
+	f.DependsOn = aux.DependsOn
+	f.InstallsAfter = aux.InstallsAfter
+
+	// Handle entrypoint field specially - it can be string or array
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	if entrypointRaw, exists := raw["entrypoint"]; exists {
+		// Try to unmarshal as string first
+		var entrypointStr string
+		if err := json.Unmarshal(entrypointRaw, &entrypointStr); err == nil {
+			// It's a string - convert to array
+			f.Entrypoint = []string{entrypointStr}
+		} else {
+			// Try as array
+			var entrypointArr []string
+			if err := json.Unmarshal(entrypointRaw, &entrypointArr); err != nil {
+				return fmt.Errorf("entrypoint must be either a string or an array of strings: %w", err)
+			}
+			f.Entrypoint = entrypointArr
+		}
+	}
+
+	return nil
 }
 
 // ResolvedFeature represents a feature that has been resolved and is ready for installation
@@ -67,7 +141,7 @@ type ResolvedFeature struct {
 	InstallPath   string
 	Options       map[string]interface{}
 	Metadata      *FeatureMetadata
-	DependsOn     []string
+	DependsOn     map[string]interface{} // Feature IDs to options mapping
 	InstallsAfter []string
 }
 
@@ -243,7 +317,7 @@ func (r *FeatureResolver) ResolveFeatures(features map[string]*ResolvedFeature) 
 		for _, feature := range remaining {
 			// Check if all hard dependencies (dependsOn) are satisfied
 			canInstall := true
-			for _, depID := range feature.DependsOn {
+			for depID := range feature.DependsOn {
 				if !installed[depID] {
 					canInstall = false
 					break
@@ -380,14 +454,15 @@ func (p *FeatureOptionsProcessor) ProcessOptions(userOptions map[string]interfac
 
 // normalizeOptionName converts option name to environment variable per specification
 func normalizeOptionName(name string) string {
-	// Per spec: replace non-word chars with underscore, prefix digits with underscore, uppercase
+	// Per Microsoft spec: replace non-word chars with underscore, then replace leading digits and underscores with single underscore, uppercase
+	// This matches Microsoft's getSafeId exactly:
+	// str.replace(/[^\w_]/g, '_').replace(/^[\d_]+/g, '_').toUpperCase()
+
 	re := regexp.MustCompile(`[^\w_]`)
 	normalized := re.ReplaceAllString(name, "_")
 
-	re2 := regexp.MustCompile(`^[\d]+`)
-	if re2.MatchString(normalized) {
-		normalized = "_" + normalized
-	}
+	re2 := regexp.MustCompile(`^[\d_]+`)
+	normalized = re2.ReplaceAllString(normalized, "_")
 
 	return strings.ToUpper(normalized)
 }

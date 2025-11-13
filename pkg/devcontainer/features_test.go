@@ -121,7 +121,7 @@ func TestResolveDependencies(t *testing.T) {
 		"id":        "feature-a",
 		"version":   "1.0.0",
 		"name":      "Feature A",
-		"dependsOn": []string{"feature-b"},
+		"dependsOn": map[string]interface{}{"feature-b": map[string]interface{}{}},
 	}
 	metadataAJSON, _ := json.Marshal(metadataA)
 	_ = os.WriteFile(filepath.Join(featureAPath, "devcontainer-feature.json"), metadataAJSON, 0644)
@@ -302,7 +302,7 @@ func TestNormalizeOptionName(t *testing.T) {
 		{"install-type", "INSTALL_TYPE"},
 		{"installZsh", "INSTALLZSH"},
 		{"node-version", "NODE_VERSION"},
-		{"123test", "_123TEST"},
+		{"123test", "_TEST"},
 		{"test@key", "TEST_KEY"},
 	}
 
@@ -353,7 +353,9 @@ func TestParseCompleteFeatureMetadata(t *testing.T) {
 		],
 		"onCreateCommand": "echo 'feature onCreate'",
 		"postCreateCommand": ["echo", "feature postCreate"],
-		"dependsOn": ["base-feature"]
+		"dependsOn": {
+			"base-feature": {}
+		}
 	}`
 
 	err = os.WriteFile(filepath.Join(featureDir, "devcontainer-feature.json"), []byte(completeMetadata), 0644)
@@ -417,8 +419,11 @@ func TestParseCompleteFeatureMetadata(t *testing.T) {
 	if resolved.Metadata.PostCreateCommand == nil {
 		t.Error("Expected PostCreateCommand to be set, got nil")
 	}
-	if len(resolved.Metadata.DependsOn) != 1 || resolved.Metadata.DependsOn[0] != "base-feature" {
-		t.Errorf("Expected DependsOn=['base-feature'], got %v", resolved.Metadata.DependsOn)
+	if len(resolved.Metadata.DependsOn) != 1 {
+		t.Errorf("Expected DependsOn with 1 dependency, got %v", resolved.Metadata.DependsOn)
+	}
+	if _, hasBaseFeature := resolved.Metadata.DependsOn["base-feature"]; !hasBaseFeature {
+		t.Errorf("Expected DependsOn to include 'base-feature', got %v", resolved.Metadata.DependsOn)
 	}
 }
 
