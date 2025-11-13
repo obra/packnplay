@@ -22,9 +22,11 @@ type Config struct {
 	Features     map[string]interface{} `json:"features,omitempty"`
 
 	// Lifecycle commands
-	OnCreateCommand   *LifecycleCommand `json:"onCreateCommand,omitempty"`
-	PostCreateCommand *LifecycleCommand `json:"postCreateCommand,omitempty"`
-	PostStartCommand  *LifecycleCommand `json:"postStartCommand,omitempty"`
+	OnCreateCommand      *LifecycleCommand `json:"onCreateCommand,omitempty"`
+	PostCreateCommand    *LifecycleCommand `json:"postCreateCommand,omitempty"`
+	PostStartCommand     *LifecycleCommand `json:"postStartCommand,omitempty"`
+	UpdateContentCommand *LifecycleCommand `json:"updateContentCommand,omitempty"`
+	PostAttachCommand    *LifecycleCommand `json:"postAttachCommand,omitempty"`
 }
 
 // LoadConfig loads and parses .devcontainer/devcontainer.json if it exists

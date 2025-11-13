@@ -161,3 +161,25 @@ func TestConfig_Features(t *testing.T) {
 		})
 	}
 }
+
+func TestConfig_AllLifecycleCommands(t *testing.T) {
+	jsonStr := `{
+		"image": "alpine:latest",
+		"updateContentCommand": "apt-get update",
+		"postAttachCommand": "echo attached"
+	}`
+
+	var config Config
+	err := json.Unmarshal([]byte(jsonStr), &config)
+	require.NoError(t, err)
+
+	require.NotNil(t, config.UpdateContentCommand)
+	cmd, ok := config.UpdateContentCommand.AsString()
+	require.True(t, ok)
+	assert.Equal(t, "apt-get update", cmd)
+
+	require.NotNil(t, config.PostAttachCommand)
+	cmd, ok = config.PostAttachCommand.AsString()
+	require.True(t, ok)
+	assert.Equal(t, "echo attached", cmd)
+}
