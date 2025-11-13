@@ -29,3 +29,5 @@ test-mount-feature/
 
 # Worktree directories
 .worktrees/
+vendor/
+packnplay-debug
