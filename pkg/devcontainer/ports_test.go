@@ -15,8 +15,8 @@ func TestParseForwardPorts_Integer(t *testing.T) {
 		t.Fatalf("Expected 1 port, got %d", len(result))
 	}
 
-	if result[0] != "3000:3000" {
-		t.Errorf("Expected '3000:3000', got '%s'", result[0])
+	if result[0] != "127.0.0.1:3000:3000" {
+		t.Errorf("Expected '127.0.0.1:3000:3000', got '%s'", result[0])
 	}
 }
 
@@ -49,7 +49,7 @@ func TestParseForwardPorts_Mixed(t *testing.T) {
 		t.Fatalf("Expected 3 ports, got %d", len(result))
 	}
 
-	expected := []string{"3000:3000", "8080:80", "127.0.0.1:9000:9000"}
+	expected := []string{"127.0.0.1:3000:3000", "8080:80", "127.0.0.1:9000:9000"}
 	for i, exp := range expected {
 		if result[i] != exp {
 			t.Errorf("Port %d: expected '%s', got '%s'", i, exp, result[i])

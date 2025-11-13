@@ -22,7 +22,8 @@ func ParseForwardPorts(ports []interface{}) ([]string, error) {
 			if portNum < 1 || portNum > 65535 {
 				return nil, fmt.Errorf("invalid port number: %d (must be 1-65535)", portNum)
 			}
-			portStr := fmt.Sprintf("%d:%d", portNum, portNum)
+			// Default to localhost binding for security (matches Microsoft behavior)
+			portStr := fmt.Sprintf("127.0.0.1:%d:%d", portNum, portNum)
 			result = append(result, portStr)
 
 		case string:

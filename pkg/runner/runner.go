@@ -417,10 +417,10 @@ func Run(config *RunConfig) error {
 	isApple := currentUser.HomeDir != "" && !isLinux && dockerClient.Command() == "container"
 	var args []string
 	if isApple {
-		args = []string{"run", "-d"}
+		args = []string{"run", "-d", "--sig-proxy=false"}
 	} else {
-		// For standard Docker, detached mode doesn't need TTY flags
-		args = []string{"run", "-d"}
+		// For standard Docker, detached mode with signal handling (Microsoft pattern)
+		args = []string{"run", "-d", "--sig-proxy=false"}
 	}
 
 	// Add labels
@@ -850,8 +850,13 @@ func Run(config *RunConfig) error {
 	}
 	args = append(args, imageName)
 
-	// Add a command that keeps container alive
-	args = append(args, "sleep", "infinity")
+	// Add signal-aware command that keeps container alive (Microsoft pattern)
+	// This provides graceful shutdown handling for SIGTERM/SIGINT
+	args = append(args, "/bin/sh", "-c", `
+echo "Container started"
+trap "exit 0" 15
+while sleep 1 & wait $!; do :; done
+`)
 
 	// Step 9: Start container in background
 	if config.Verbose {
