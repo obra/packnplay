@@ -2152,3 +2152,70 @@ func TestE2E_FeatureOptionValidation(t *testing.T) {
 		}
 	}
 }
+
+// TestE2E_MicrosoftUniversalPattern tests Microsoft's universal devcontainer pattern
+// with actual community features from ghcr.io/devcontainers/features
+func TestE2E_MicrosoftUniversalPattern(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Use actual Microsoft universal devcontainer pattern with popular features
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+			"features": {
+				"ghcr.io/devcontainers/features/common-utils:2": {
+					"installZsh": true
+				},
+				"ghcr.io/devcontainers/features/node:1": {
+					"version": "20"
+				}
+			},
+			"remoteUser": "vscode"
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Test 1: Verify container builds and starts successfully
+	t.Log("Starting container with Microsoft universal pattern...")
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "container started successfully")
+	require.NoError(t, err, "Container should start successfully: %s", output)
+	require.Contains(t, output, "container started successfully")
+
+	// Test 2: Verify Node.js 20 is installed (from node feature)
+	t.Log("Verifying Node.js 20 installation...")
+	nodeOutput, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "node", "--version")
+	require.NoError(t, err, "Node.js should be installed: %s", nodeOutput)
+	require.Contains(t, nodeOutput, "v20", "Should have Node.js version 20.x installed")
+
+	// Test 3: Verify git is available (from common-utils feature)
+	t.Log("Verifying git installation from common-utils...")
+	gitOutput, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "which", "git")
+	require.NoError(t, err, "git should be installed: %s", gitOutput)
+	require.Contains(t, gitOutput, "git", "git should be available in PATH")
+
+	// Test 4: Verify zsh is installed (common-utils with installZsh: true)
+	t.Log("Verifying zsh installation from common-utils...")
+	zshOutput, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "which", "zsh")
+	require.NoError(t, err, "zsh should be installed when installZsh is true: %s", zshOutput)
+	require.Contains(t, zshOutput, "zsh", "zsh should be available")
+
+	// Test 5: Verify remoteUser is vscode
+	t.Log("Verifying remoteUser is vscode...")
+	userOutput, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "whoami")
+	require.NoError(t, err, "whoami should work: %s", userOutput)
+	require.Contains(t, userOutput, "vscode", "Should be running as vscode user")
+
+	t.Log("Microsoft universal pattern test completed successfully!")
+	t.Logf("Validated tools: Node.js v20, git, zsh")
+	t.Logf("Validated user: vscode")
+	t.Logf("Container: %s", containerName)
+}
