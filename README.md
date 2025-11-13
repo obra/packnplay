@@ -231,7 +231,7 @@ Pack 'n Play creates git worktrees in XDG-compliant locations for isolation:
 
 ### Dev Container Support
 
-packnplay provides **production-ready devcontainer.json support** with **97% Microsoft specification compliance** for reproducible development environments.
+packnplay achieves **97% Microsoft devcontainer specification compliance**—production-ready support for reproducible development environments.
 
 **Quick Example:**
 ```json
@@ -262,61 +262,61 @@ packnplay provides **production-ready devcontainer.json support** with **97% Mic
 }
 ```
 
-#### **🎯 Complete Specification Support**
+#### **🎯 Supported Features**
 
 **✅ Container Configuration:**
-- `name` - Display name for the dev container
-- `image` - Docker images from any registry
-- `dockerfile` / `build` - Advanced Dockerfile builds (args, target, context, cacheFrom, options)
-- `workspaceFolder`, `workspaceMount` - Full workspace configuration
-- `remoteUser` - User management (auto-detected if not specified)
+- `name` - Container display name
+- `image` - Any Docker registry image
+- `dockerfile` / `build` - Custom builds with args, target, context, cacheFrom
+- `workspaceFolder`, `workspaceMount` - Workspace configuration
+- `remoteUser` - User management (auto-detected when omitted)
 
-**✅ Microsoft DevContainer Features (Full Support):**
-- **OCI Registry Features**: `ghcr.io/devcontainers/features/*` (complete Microsoft ecosystem)
+**✅ Microsoft DevContainer Features:**
+- **OCI Registry**: Full `ghcr.io/devcontainers/features/*` support
 - **Local Features**: `.devcontainer/local-features/`
-- **Feature Options**: Type validation (string, boolean, number) with enum support
-- **Feature Dependencies**: Complex dependency chains with `dependsOn` object format
-- **Feature Properties**: `privileged`, `capAdd`, `securityOpt`, `init`, `entrypoint`, `mounts`
-- **Variable Substitution**: `${devcontainerId}`, `${localWorkspaceFolder}`, `${containerWorkspaceFolder}`, etc.
+- **Option Validation**: String, boolean, number types with enum checking
+- **Dependencies**: Complex chains via `dependsOn` object format
+- **Properties**: `privileged`, `capAdd`, `securityOpt`, `init`, `entrypoint`, `mounts`
+- **Variables**: `${devcontainerId}`, `${localWorkspaceFolder}`, `${containerWorkspaceFolder}`
 
 **✅ Environment Variables:**
-- `containerEnv` - Runtime environment variables with full variable substitution
-- **Built-in Variables**: `_REMOTE_USER`, `_REMOTE_USER_HOME`, `_CONTAINER_USER`
-- **Variable Patterns**: `${localEnv:VAR}`, `${containerWorkspaceFolder}`, `${devcontainerId}`, etc.
+- `containerEnv` - Runtime variables with full substitution
+- **Built-in**: `_REMOTE_USER`, `_REMOTE_USER_HOME`, `_CONTAINER_USER`
+- **Patterns**: `${localEnv:VAR}`, `${containerWorkspaceFolder}`, `${devcontainerId}`
 
 **✅ Port Forwarding:**
-- `forwardPorts` - Secure localhost binding by default (matches Microsoft behavior)
-- **Format Support**: Integers (`3000`), strings (`"8080:3000"`), IP binding (`"127.0.0.1:8080:3000"`)
+- `forwardPorts` - Secure localhost binding (matches Microsoft behavior)
+- **Formats**: Integers (`3000`), strings (`"8080:3000"`), IP binding (`"127.0.0.1:8080:3000"`)
 
-**✅ Lifecycle Commands (Complete):**
-- `onCreateCommand` - Runs **once** on container creation (intelligent change tracking)
+**✅ Lifecycle Commands:**
+- `onCreateCommand` - Runs once on creation (tracks changes)
 - `updateContentCommand` - Content change hooks
-- `postCreateCommand` - Runs **once** after creation
-- `postStartCommand` - Runs **every time** container starts
-- `postAttachCommand` - Runs when tools attach to container
-- **All formats supported**: string (shell), array (direct exec), object (parallel tasks)
-- **Microsoft-compatible execution order**: Feature commands run before user commands
+- `postCreateCommand` - Runs once after creation
+- `postStartCommand` - Runs every container start
+- `postAttachCommand` - Runs when tools attach
+- **Formats**: String (shell), array (exec), object (parallel)
+- **Execution order**: Feature commands precede user commands
 
-**✅ Advanced Configuration:**
+**✅ Advanced Features:**
 - `mounts` - Volume mounts with variable substitution
-- `runArgs` - Additional Docker run arguments
-- **Signal Handling**: Graceful container shutdown with SIGTERM support
-- **Feature Integration**: Complete feature metadata processing
+- `runArgs` - Additional Docker arguments
+- **Signal Handling**: Graceful shutdown with SIGTERM
+- **Feature Integration**: Complete metadata processing
 
-#### **🚧 Remaining Gaps (3% of specification)**
+#### **🚧 Minor Gaps (3% of specification)**
 
-**High Priority (would complete specification):**
-- ❌ `initializeCommand` - Host-side execution before container creation
-- ❌ `remoteEnv` - Environment variables computed inside container
-- ❌ Container restart logic (currently recreates instead of reusing stopped containers)
+**Would complete specification:**
+- ❌ `initializeCommand` - Host-side pre-container execution
+- ❌ `remoteEnv` - Container-computed environment variables
+- ❌ Container restart (recreates stopped containers instead)
 
-**Medium Priority (advanced features):**
-- ❌ HTTPS tarball feature sources (`https://example.com/feature.tgz`)
-- ❌ Registry authentication for private features
-- ❌ Lockfile support for reproducible builds
-- ❌ `portsAttributes` for advanced port configuration
+**Advanced features:**
+- ❌ HTTPS tarball features (`https://example.com/feature.tgz`)
+- ❌ Private feature authentication
+- ❌ Lockfile support
+- ❌ `portsAttributes` configuration
 
-**See [GitHub Issues](https://github.com/obra/packnplay/issues?q=is%3Aissue+is%3Aopen+label%3Adevcontainer) for detailed roadmap.**
+**See [GitHub Issues](https://github.com/obra/packnplay/issues?q=is%3Aissue+is%3Aopen+label%3Adevcontainer) for roadmap.**
 
 **📖 Full Documentation:** See [DevContainer Guide](docs/DEVCONTAINER_GUIDE.md) for complete reference with examples.
 
