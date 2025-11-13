@@ -99,12 +99,9 @@ func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, fea
 			enhancedArgs = append(enhancedArgs, "--entrypoint="+strings.Join(metadata.Entrypoint, " "))
 		}
 
-		// Apply feature environment variables (for runtime context)
-		// NOTE: ContainerEnv from features is ALSO set in the Dockerfile as ENV statements,
-		// but we return them here for runtime environment context
-		for key, value := range metadata.ContainerEnv {
-			enhancedEnv[key] = value
-		}
+		// NOTE: ContainerEnv from features is set in the Dockerfile as ENV statements
+		// and should NOT be applied as runtime -e flags to avoid ${PATH} reference issues.
+		// The Dockerfile ENV statements handle variable references correctly during build.
 
 		// Apply feature-contributed mounts with variable substitution
 		for _, mount := range metadata.Mounts {
@@ -646,9 +643,12 @@ func Run(config *RunConfig) error {
 		}
 	}
 
+	// Set working directory - respect workspaceFolder from devcontainer.json
 	workingDir := mountPath
+	if devConfig.WorkspaceFolder != "" {
+		workingDir = devConfig.WorkspaceFolder
+	}
 
-	// Set working directory to host path
 	args = append(args, "-w", workingDir)
 
 	// Add environment variables
@@ -870,11 +870,7 @@ func Run(config *RunConfig) error {
 
 	// Add signal-aware command that keeps container alive (Microsoft pattern)
 	// This provides graceful shutdown handling for SIGTERM/SIGINT
-	args = append(args, "/bin/sh", "-c", `
-echo "Container started"
-trap "exit 0" 15
-while sleep 1 & wait $!; do :; done
-`)
+	args = append(args, "/bin/sh", "-c", "echo 'Container started' && trap 'exit 0' 15 && while true; do sleep 1 & wait $!; done")
 
 	// Step 9: Start container in background
 	if config.Verbose {
@@ -1270,7 +1266,7 @@ func generateDirectoryCreationCommands(hostPath string) [][]string {
 	// Create parent directories in container
 	parentDir := filepath.Dir(hostPath)
 	if parentDir != "/" && parentDir != "." {
-		commands = append(commands, []string{"mkdir", "-p", parentDir})
+		commands = append(commands, []string{"/bin/mkdir", "-p", parentDir})
 	}
 
 	return commands
@@ -1598,7 +1594,7 @@ func copyFileToContainer(dockerClient *docker.Client, containerID, srcPath, dstP
 	// Docker/Podman: use cp command
 	// Ensure parent directory exists in container
 	dstDir := filepath.Dir(dstPath)
-	output, err := dockerClient.Run("exec", containerID, "mkdir", "-p", dstDir)
+	output, err := dockerClient.Run("exec", containerID, "/bin/mkdir", "-p", dstDir)
 	if err != nil {
 		return fmt.Errorf("failed to create parent directory %s: %w\nDocker output:\n%s", dstDir, err, output)
 	}
@@ -1612,7 +1608,7 @@ func copyFileToContainer(dockerClient *docker.Client, containerID, srcPath, dstP
 
 	// Fix ownership (docker cp creates as root)
 	// Only chown the specific file, not the entire directory (might contain read-only mounts)
-	_, err = dockerClient.Run("exec", "-u", "root", containerID, "chown", fmt.Sprintf("%s:%s", user, user), dstPath)
+	_, err = dockerClient.Run("exec", "-u", "root", containerID, "/bin/chown", fmt.Sprintf("%s:%s", user, user), dstPath)
 	if err != nil && verbose {
 		fmt.Fprintf(os.Stderr, "Warning: failed to fix ownership: %v\n", err)
 	}

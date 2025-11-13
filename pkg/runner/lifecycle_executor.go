@@ -86,7 +86,7 @@ func (le *LifecycleExecutor) executeShellCommand(cmd string) error {
 		"exec",
 		"-u", le.containerUser,
 		le.containerName,
-		"sh", "-c", cmd,
+		"/bin/sh", "-c", cmd,
 	}
 
 	output, err := le.client.Run(args...)
