@@ -2025,7 +2025,7 @@ touch /feature-installed
 			"postCreateCommand": "echo 'user postCreate' >> /tmp/feature-lifecycle.log"
 		}`,
 		".devcontainer/local-features/lifecycle-feature/devcontainer-feature.json": metadata,
-		".devcontainer/local-features/lifecycle-feature/install.sh":                 installScript,
+		".devcontainer/local-features/lifecycle-feature/install.sh":                installScript,
 	})
 	defer os.RemoveAll(projectDir)
 
@@ -2130,9 +2130,9 @@ func TestE2E_FeatureOptionValidation(t *testing.T) {
 		// If it failed, error message should mention the invalid version or option
 		require.True(t,
 			strings.Contains(output, "banana") ||
-			strings.Contains(output, "version") ||
-			strings.Contains(output, "invalid") ||
-			strings.Contains(strings.ToLower(output), "error"),
+				strings.Contains(output, "version") ||
+				strings.Contains(output, "invalid") ||
+				strings.Contains(strings.ToLower(output), "error"),
 			"Error message should clearly indicate what went wrong: %s", output)
 	} else {
 		// If it succeeded, check if Node was installed (it might fall back to default)
@@ -2141,8 +2141,8 @@ func TestE2E_FeatureOptionValidation(t *testing.T) {
 			// Node installation failed - this is acceptable, but we should have seen a warning
 			require.True(t,
 				strings.Contains(output, "warning") ||
-				strings.Contains(output, "banana") ||
-				strings.Contains(strings.ToLower(output), "error"),
+					strings.Contains(output, "banana") ||
+					strings.Contains(strings.ToLower(output), "error"),
 				"Should have warning about invalid version in output: %s", output)
 		} else {
 			// Node was installed despite invalid version - check for warning in original output

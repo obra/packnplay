@@ -195,10 +195,10 @@ func TestGenerateSingleStageWithLocalFeature(t *testing.T) {
 
 func TestFeatureUserContextVariables(t *testing.T) {
 	tests := []struct {
-		name           string
-		remoteUser     string
-		useMultiStage  bool
-		expectedEnvs   []string
+		name          string
+		remoteUser    string
+		useMultiStage bool
+		expectedEnvs  []string
 	}{
 		{
 			name:          "single stage with vscode user",
