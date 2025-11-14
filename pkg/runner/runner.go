@@ -137,8 +137,15 @@ func Run(config *RunConfig) error {
 		}
 	}
 
+	// Resolve symlinks to ensure consistent paths for container reconnection
+	resolvedWorkDir, err := filepath.EvalSymlinks(workDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve symlinks in working directory: %w", err)
+	}
+	workDir = resolvedWorkDir
+
 	// Make absolute
-	workDir, err := filepath.Abs(workDir)
+	workDir, err = filepath.Abs(workDir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve path: %w", err)
 	}
