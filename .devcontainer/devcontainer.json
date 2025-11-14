@@ -62,9 +62,13 @@
     ],
     "ai-tools": [
       "echo 'Installing AI CLI tools...'",
-      "npm install -g @anthropic-ai/claude-cli",
-      "pip install openai anthropic",
-      "echo 'AI tools installed successfully'"
+      "npm install -g @sourcegraph/amp",
+      "npm install -g @qwen-code/qwen-code",
+      "npm install -g @google/gemini-cli",
+      "npm install -g @github/copilot",
+      "npm install -g @openai/codex",
+      "npm install -g @anthropic-ai/claude-code",
+      "echo 'All AI CLI tools installed successfully'"
     ]
   },
   "postCreateCommand": [
