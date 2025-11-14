@@ -542,6 +542,12 @@ func Run(config *RunConfig) error {
 		}
 	}
 
+	// Mount OpenCode config directory if it exists (for opencode-ai CLI tool)
+	opencodeConfigPath := filepath.Join(homeDir, ".config", "opencode")
+	if fileExists(opencodeConfigPath) {
+		args = append(args, "-v", fmt.Sprintf("%s:/home/%s/.config/opencode", opencodeConfigPath, devConfig.RemoteUser))
+	}
+
 	if config.Credentials.GPG {
 		// Mount .gnupg directory (read-only for security)
 		gnupgPath := filepath.Join(homeDir, ".gnupg")

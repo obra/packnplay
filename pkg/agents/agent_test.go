@@ -17,7 +17,7 @@ func TestGetSupportedAgents(t *testing.T) {
 		agentNames[agent.Name()] = true
 	}
 
-	expectedAgents := []string{"claude", "codex", "gemini"}
+	expectedAgents := []string{"claude", "codex", "gemini", "opencode"}
 	for _, expected := range expectedAgents {
 		if !agentNames[expected] {
 			t.Errorf("Expected agent '%s' not found in supported agents", expected)
@@ -160,5 +160,41 @@ func TestGetDefaultEnvVars(t *testing.T) {
 	// Should have a reasonable number of env vars (not too few, not too many)
 	if len(envVars) < 6 {
 		t.Errorf("GetDefaultEnvVars() returned only %d vars, expected at least 6", len(envVars))
+	}
+}
+
+func TestOpenCodeAgent(t *testing.T) {
+	agent := &OpenCodeAgent{}
+
+	if agent.Name() != "opencode" {
+		t.Errorf("Name() = %v, want opencode", agent.Name())
+	}
+
+	if agent.ConfigDir() != ".config/opencode" {
+		t.Errorf("ConfigDir() = %v, want .config/opencode", agent.ConfigDir())
+	}
+
+	if agent.DefaultAPIKeyEnv() != "OPENCODE_API_KEY" {
+		t.Errorf("DefaultAPIKeyEnv() = %v, want OPENCODE_API_KEY", agent.DefaultAPIKeyEnv())
+	}
+
+	if agent.RequiresSpecialHandling() {
+		t.Error("RequiresSpecialHandling() = true, want false for OpenCode")
+	}
+
+	// Test mounts with vscode user
+	mounts := agent.GetMounts("/home/test", "vscode")
+	if len(mounts) != 1 {
+		t.Errorf("GetMounts() returned %d mounts, want 1", len(mounts))
+	}
+
+	expected := Mount{
+		HostPath:      "/home/test/.config/opencode",
+		ContainerPath: "/home/vscode/.config/opencode", 
+		ReadOnly:      false,
+	}
+
+	if mounts[0] != expected {
+		t.Errorf("GetMounts() = %+v, want %+v", mounts[0], expected)
 	}
 }

@@ -31,6 +31,7 @@ func GetSupportedAgents() []Agent {
 		&CursorAgent{},
 		&AmpAgent{},
 		&DeepSeekAgent{},
+		&OpenCodeAgent{},
 	}
 }
 
@@ -218,6 +219,29 @@ func (d *DeepSeekAgent) GetMounts(hostHomeDir string, containerUser string) []Mo
 	}
 }
 
+// OpenCodeAgent implements OpenCode AI specific requirements
+type OpenCodeAgent struct{}
+
+func (o *OpenCodeAgent) Name() string                  { return "opencode" }
+func (o *OpenCodeAgent) ConfigDir() string             { return ".config/opencode" }
+func (o *OpenCodeAgent) DefaultAPIKeyEnv() string      { return "OPENCODE_API_KEY" }
+func (o *OpenCodeAgent) RequiresSpecialHandling() bool { return false } // Standard config mount
+
+func (o *OpenCodeAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
+	containerHomeDir := "/root"
+	if containerUser != "root" {
+		containerHomeDir = "/home/" + containerUser
+	}
+
+	return []Mount{
+		{
+			HostPath:      filepath.Join(hostHomeDir, ".config", "opencode"),
+			ContainerPath: filepath.Join(containerHomeDir, ".config", "opencode"),
+			ReadOnly:      false,
+		},
+	}
+}
+
 // GetDefaultEnvVars returns default environment variables that should be proxied
 func GetDefaultEnvVars() []string {
 	return []string{
@@ -231,5 +255,8 @@ func GetDefaultEnvVars() []string {
 		"CURSOR_API_KEY",
 		"AMP_API_KEY",
 		"DEEPSEEK_API_KEY",
+		"OPENCODE_API_KEY",    // OpenCode AI
+		"OPENCODE_CONFIG",     // Custom config file path
+		"OPENCODE_CONFIG_DIR", // Custom config directory
 	}
 }
