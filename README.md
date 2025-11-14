@@ -200,6 +200,37 @@ packnplay run --env EDITOR bash
 packnplay run --env DEBUG=1 --env EDITOR bash
 ```
 
+### AI Agent Support
+
+packnplay provides **first-class support for 7 major AI coding assistants** with automatic configuration and credential management.
+
+**Supported AI Agents:**
+- **Claude Code** (`claude`) - Anthropic's coding assistant with `.claude/` config mounting
+- **OpenCode AI** (`opencode`) - Modern AI coding platform with `.config/opencode/` support
+- **OpenAI Codex** (`codex`) - OpenAI's code generation model
+- **Google Gemini** (`gemini`) - Google's AI coding assistant
+- **GitHub Copilot** (`copilot`) - GitHub's AI pair programmer
+- **Qwen Code** (`qwen`) - Alibaba's coding AI
+- **Sourcegraph Amp** (`amp`) - Code search and navigation AI
+
+**Automatic Configuration:**
+- **Config Directories**: Mounts appropriate config directories (`.claude/`, `.config/opencode/`, etc.)
+- **API Keys**: Passes through relevant environment variables (`ANTHROPIC_API_KEY`, `OPENCODE_API_KEY`, etc.)
+- **Authentication**: Handles GitHub tokens, custom API endpoints
+- **Persistence**: Preserves settings and authentication across container runs
+
+**Example Usage:**
+```bash
+# Claude Code with automatic config mounting
+packnplay run claude
+
+# OpenCode AI with config and credential support
+packnplay run opencode
+
+# Any AI agent with custom environment
+packnplay run --env OPENCODE_CONFIG=/custom/path opencode
+```
+
 ## How It Works
 
 ### Smart User Detection
@@ -323,12 +354,27 @@ packnplay achieves **97% Microsoft devcontainer specification compliance**—pro
 **Fallback:**
 If `.devcontainer/devcontainer.json` not found, uses `ghcr.io/obra/packnplay/devcontainer:latest`
 
-**Default container includes:**
-- **Languages**: Node.js LTS, Python 3.11+ with uv, Go latest, Rust latest
-- **Cloud CLIs**: AWS CLI, Azure CLI, Google Cloud CLI, GitHub CLI
-- **Utilities**: jq, yq, curl, wget, vim, nano, make, build-essential
-- **AI CLI tools**: Claude Code, OpenAI Codex, Google Gemini, GitHub Copilot, Qwen Code, Sourcegraph Amp
-- **Version control**: Git with full functionality
+**Default container architecture:**
+- **Foundation**: Microsoft devcontainer features (reliable, maintained, consistent)
+- **Languages**: Node.js LTS, Python 3.11+, Go latest, Rust latest
+- **Cloud CLIs**: AWS, Azure, Google Cloud, GitHub
+- **Development Tools**: Git, build-essential, vim, nano, jq, yq, curl, wget, make
+- **Shell**: Zsh with oh-my-zsh (better developer experience)
+
+**AI Coding Assistant Ecosystem:**
+- **Claude Code** - Anthropic's premier coding assistant
+- **OpenCode AI** - Modern AI coding platform with advanced features
+- **OpenAI Codex** - OpenAI's foundational code model
+- **Google Gemini** - Google's multimodal AI assistant
+- **GitHub Copilot** - GitHub's AI pair programmer
+- **Qwen Code** - Alibaba's efficient coding model
+- **Sourcegraph Amp** - Code search and navigation AI
+
+**Configuration Management:**
+- **Automatic mounting**: Each AI tool's config directory mounted seamlessly
+- **Credential passthrough**: API keys and tokens handled securely
+- **Persistent settings**: Configuration survives container recreation
+- **Environment flexibility**: Custom configs via environment variables
 
 ### Default Container Configuration
 
