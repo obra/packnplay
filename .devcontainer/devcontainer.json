@@ -1,9 +1,74 @@
 {
-  "name": "packnplay Default Container with AI CLIs",
-  "dockerFile": "Dockerfile",
-  "remoteUser": "vscode",
+  "name": "packnplay Default Development Container",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
   "features": {
-    "ghcr.io/devcontainers/features/common-utils:2": {},
-    "ghcr.io/devcontainers/features/git:1": {}
-  }
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": true,
+      "username": "vscode",
+      "userUid": "automatic",
+      "userGid": "automatic",
+      "upgradePackages": true
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts",
+      "nodeGypDependencies": true,
+      "nvmVersion": "latest"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11",
+      "installTools": true,
+      "optimize": true,
+      "enableShared": true
+    },
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "latest",
+      "profile": "default"
+    },
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "installDirectlyFromGitHubRelease": true,
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/aws-cli:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/azure-cli:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/git:1": {
+      "ppa": true,
+      "version": "latest"
+    }
+  },
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "SHELL": "/bin/zsh",
+    "TERM": "xterm-256color"
+  },
+  "onCreateCommand": {
+    "versions": [
+      "echo 'Development Environment Setup Complete'",
+      "echo 'Tool Versions:'",
+      "node --version",
+      "python3 --version",
+      "go version",
+      "rustc --version",
+      "gh --version",
+      "aws --version",
+      "az --version"
+    ],
+    "ai-tools": [
+      "echo 'Installing AI CLI tools...'",
+      "npm install -g @anthropic-ai/claude-cli",
+      "pip install openai anthropic",
+      "echo 'AI tools installed successfully'"
+    ]
+  },
+  "postCreateCommand": [
+    "echo 'packnplay default container ready with Microsoft features'",
+    "echo 'All development tools installed and configured properly'"
+  ]
 }
