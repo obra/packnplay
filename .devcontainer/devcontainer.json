@@ -68,6 +68,7 @@
       "npm install -g @github/copilot",
       "npm install -g @openai/codex",
       "npm install -g @anthropic-ai/claude-code",
+      "npm install -g opencode-ai",
       "echo 'All AI CLI tools installed successfully'"
     ]
   },
