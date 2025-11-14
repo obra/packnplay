@@ -906,7 +906,7 @@ func getDefaultImageValue(cfg *Config) string {
 	if cfg.DefaultImage != "" {
 		return cfg.DefaultImage
 	}
-	return "ghcr.io/obra/packnplay-default:latest"
+	return "ghcr.io/obra/packnplay/devcontainer:latest"
 }
 
 // Init implements tea.Model for SettingsModal
@@ -1470,7 +1470,7 @@ func Load() (*Config, error) {
 
 	// Set default image if not configured (backward compatibility)
 	if cfg.DefaultImage == "" {
-		cfg.DefaultImage = "ghcr.io/obra/packnplay-default:latest"
+		cfg.DefaultImage = "ghcr.io/obra/packnplay/devcontainer:latest"
 	}
 
 	return &cfg, nil
@@ -1498,7 +1498,7 @@ func LoadWithoutRuntimeCheck() (*Config, error) {
 
 	// Set default image if not configured (backward compatibility)
 	if cfg.DefaultImage == "" {
-		cfg.DefaultImage = "ghcr.io/obra/packnplay-default:latest"
+		cfg.DefaultImage = "ghcr.io/obra/packnplay/devcontainer:latest"
 	}
 
 	return &cfg, nil

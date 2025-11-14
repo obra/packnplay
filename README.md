@@ -321,7 +321,7 @@ packnplay achieves **97% Microsoft devcontainer specification compliance**—pro
 **📖 Full Documentation:** See [DevContainer Guide](docs/DEVCONTAINER_GUIDE.md) for complete reference with examples.
 
 **Fallback:**
-If `.devcontainer/devcontainer.json` not found, uses `ghcr.io/obra/packnplay-default:latest`
+If `.devcontainer/devcontainer.json` not found, uses `ghcr.io/obra/packnplay/devcontainer:latest`
 
 **Default container includes:**
 - **Languages**: Node.js LTS, Python 3.11+ with uv, Go latest, Rust latest
@@ -350,7 +350,7 @@ packnplay supports custom default containers - you're not limited to the packnpl
 When enabled, packnplay checks for new versions and shows detailed notifications:
 
 ```bash
-ℹ️  New version available: ghcr.io/obra/packnplay-default:latest
+ℹ️  New version available: ghcr.io/obra/packnplay/devcontainer:latest
    Current: abc123de (2 days old)
    Latest:  xyz789gh (just released)
 

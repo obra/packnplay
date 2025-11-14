@@ -59,7 +59,7 @@ var runCmd = &cobra.Command{
 				// Config doesn't exist - use defaults
 				cfg = &config.Config{
 					ContainerRuntime: runRuntime,
-					DefaultImage:     "ghcr.io/obra/packnplay-default:latest",
+					DefaultImage:     "ghcr.io/obra/packnplay/devcontainer:latest",
 					DefaultCredentials: config.Credentials{
 						Git: true,  // Always copy .gitconfig
 						SSH: false, // SSH keys are credentials - user choice
