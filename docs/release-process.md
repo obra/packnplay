@@ -19,6 +19,32 @@ git checkout main
 git pull origin main
 ```
 
+### 1.5. Verify Version System (Before Release)
+
+Before creating the release tag, verify the version system works correctly:
+
+```bash
+# Build locally to test version injection
+make build
+./packnplay version
+
+# Should show development version like: v1.1.0-89-g8a39345
+# Commit hash should match: git rev-parse HEAD
+# Build date should be recent
+```
+
+**Expected Output:**
+```
+packnplay v1.1.0-89-g8a39345
+  commit: 8a393453a45aa38bc5cc0ca60c7560fabdabc13d
+  built:  2025-11-15T17:19:46Z
+```
+
+If version shows default values ("dev", "none", "unknown"), check:
+1. Git repository has commits and tags
+2. Makefile LDFLAGS are correctly configured
+3. Build is using `make build` not `go build`
+
 ### 2. Update Version and Changelog
 
 Update `CHANGELOG.md` with release notes following the existing format:

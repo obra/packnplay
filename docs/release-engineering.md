@@ -148,6 +148,29 @@ go build -o packnplay
 go test ./... -v
 ```
 
+### Version Information System
+
+packnplay uses build-time variable injection to provide accurate version information:
+
+**Components:**
+- **Version**: From `git describe --tags --always` (e.g., `v1.1.0-89-g8a39345`)
+- **Commit**: From `git rev-parse HEAD` (full commit hash)
+- **Build Date**: UTC timestamp in ISO format
+
+**Build Methods:**
+- **Development builds**: `make build` - Uses git-derived version
+- **Release builds**: GoReleaser - Uses tag-based version with {{.Version}}
+- **Manual builds**: `go build` - Shows default values ("dev", "none", "unknown")
+
+**Verification:**
+Always verify version information after builds:
+```bash
+./packnplay version
+# Should show: packnplay v1.1.0-89-g8a39345
+#              commit: 8a393453a45aa38bc...
+#              built:  2025-11-15T17:19:46Z
+```
+
 ### 6. Commit Release Changes
 
 ```bash

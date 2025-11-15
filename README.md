@@ -37,18 +37,26 @@ I built packnplay as a lightweight container/worktree launcher for my coding age
 brew install obra/tap/packnplay
 ```
 
-### From Source
+### Build from Source
 
+**Prerequisites:**
+- Go 1.21 or later
+- Git (for version information)
+
+**Build with version information:**
 ```bash
-go build -o packnplay .
-sudo mv packnplay /usr/local/bin/
+git clone https://github.com/obra/packnplay.git
+cd packnplay
+make build
+./packnplay version
 ```
 
-Or install directly:
-
+**Quick install without Makefile:**
 ```bash
 go install github.com/obra/packnplay@latest
 ```
+
+Note: Building with `make build` includes proper version, commit, and build date information. Direct `go build` or `go install` will show default values.
 
 ## Quick Start
 
