@@ -19,6 +19,20 @@ jobs:
         with:
           go-version: '1.23'
 
+      - name: Install oras for OCI feature tests
+        run: |
+          curl -LO https://github.com/oras-project/oras/releases/download/v1.3.0/oras_1.3.0_linux_amd64.tar.gz
+          tar -xzf oras_1.3.0_linux_amd64.tar.gz
+          sudo mv oras /usr/local/bin/
+          oras version
+
+      - name: Pull required Docker images for tests
+        run: |
+          docker pull mcr.microsoft.com/devcontainers/base:ubuntu
+          docker pull node:18
+          docker pull ubuntu:22.04
+          docker pull alpine:latest
+
       - name: Run tests
         run: make test
 
