@@ -60,7 +60,16 @@ func TestSymlinkResolution(t *testing.T) {
 	}
 
 	// Verify the resolved path points to the real directory, not the symlink
-	expectedRealPath := realDir
+	// Resolve symlinks in expected path too to handle macOS /var -> /private/var
+	expectedRealPath, err := filepath.EvalSymlinks(realDir)
+	if err != nil {
+		t.Fatalf("Failed to resolve symlinks in expected path: %v", err)
+	}
+	expectedRealPath, err = filepath.Abs(expectedRealPath)
+	if err != nil {
+		t.Fatalf("Failed to make expected path absolute: %v", err)
+	}
+
 	if resolvedPath != expectedRealPath {
 		t.Errorf("Symlink resolution failed:\n  Symlinked path: %s\n  Resolved path:  %s\n  Expected path:  %s",
 			projectDir, resolvedPath, expectedRealPath)
@@ -118,9 +127,19 @@ func TestSymlinkResolutionWithAbsolutePath(t *testing.T) {
 	}
 
 	// Should resolve to the real directory
-	if resolvedPath != realDir {
+	// Resolve symlinks in expected path too to handle macOS /var -> /private/var
+	expectedRealPath, err := filepath.EvalSymlinks(realDir)
+	if err != nil {
+		t.Fatalf("Failed to resolve symlinks in expected path: %v", err)
+	}
+	expectedRealPath, err = filepath.Abs(expectedRealPath)
+	if err != nil {
+		t.Fatalf("Failed to make expected path absolute: %v", err)
+	}
+
+	if resolvedPath != expectedRealPath {
 		t.Errorf("Absolute symlink resolution failed:\n  Symlink: %s\n  Resolved: %s\n  Expected: %s",
-			linkDir, resolvedPath, realDir)
+			linkDir, resolvedPath, expectedRealPath)
 	}
 }
 
@@ -160,8 +179,18 @@ func TestNoSymlinkResolution(t *testing.T) {
 	}
 
 	// Should be the same as the original (no symlinks to resolve)
-	if resolvedPath != regularDir {
+	// Resolve symlinks in expected path too to handle macOS /var -> /private/var
+	expectedPath, err := filepath.EvalSymlinks(regularDir)
+	if err != nil {
+		t.Fatalf("Failed to resolve symlinks in expected path: %v", err)
+	}
+	expectedPath, err = filepath.Abs(expectedPath)
+	if err != nil {
+		t.Fatalf("Failed to make expected path absolute: %v", err)
+	}
+
+	if resolvedPath != expectedPath {
 		t.Errorf("Regular path resolution should be identity:\n  Original: %s\n  Resolved: %s",
-			regularDir, resolvedPath)
+			expectedPath, resolvedPath)
 	}
 }

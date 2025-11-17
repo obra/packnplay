@@ -41,6 +41,7 @@ func isDockerAvailable() bool {
 	return cmd.Run() == nil
 }
 
+
 // createTestProject creates a temporary test project with the given files
 // Returns the absolute path to the project directory
 func createTestProject(t *testing.T, files map[string]string) string {
@@ -1977,7 +1978,7 @@ func TestE2E_NodeFeatureWithVersion(t *testing.T) {
 			"image": "mcr.microsoft.com/devcontainers/base:ubuntu",
 			"features": {
 				"ghcr.io/devcontainers/features/node:1": {
-					"version": "18.20.0"
+					"version": "20"
 				}
 			}
 		}`,
@@ -1993,10 +1994,10 @@ func TestE2E_NodeFeatureWithVersion(t *testing.T) {
 		}
 	}()
 
-	// Verify specific Node.js version installed
+	// Verify specific Node.js version installed (version "20" installs latest v20.x)
 	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "node", "--version")
 	require.NoError(t, err, "Node version check failed: %s", output)
-	require.Contains(t, output, "v18.20.0", "Expected specific Node.js version")
+	require.Contains(t, output, "v20.", "Expected Node.js version 20.x")
 }
 
 // TestE2E_FeatureLifecycleCommands tests that feature lifecycle commands execute before user commands

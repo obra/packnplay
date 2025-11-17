@@ -5,6 +5,72 @@ All notable changes to packnplay will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.2.0] - 2025-11-16
+
+### Added
+
+#### OpenCode AI Platform Support
+- Complete integration with OpenCode AI coding platform
+- Automatic configuration directory mounting (`.config/opencode/`)
+- Environment variable passthrough (`OPENCODE_API_KEY`)
+- Added opencode-ai to default container AI tool suite
+- Full CLI tool suite restoration with enhanced AI agent support
+
+#### Microsoft DevContainer Features Specification Compliance
+- **OCI Registry Support**: Full `ghcr.io/devcontainers/features/*` support with oras integration
+- **Local Features**: Complete `.devcontainer/local-features/` directory support
+- **Feature Options Processing**: Type validation, enum checking, and version constraints
+- **Feature Dependencies**: Automatic resolution algorithm with circular dependency detection
+- **Lifecycle Hooks**: postCreateCommand, updateContentCommand, postAttachCommand, and init/entrypoint support
+- **Feature Mounts**: Feature-contributed mount points with proper integration
+- **Multi-stage Builds**: Automatic detection and OCI feature build context copying
+- **Container Properties**: Support for feature-contributed container configuration
+
+#### Enhanced DevContainer Support
+- Variable substitution engine for devcontainer.json properties
+- Custom mounts processing with host path validation
+- Custom runArgs integration with Docker command generation
+- Port forwarding configuration from devcontainer forwardPorts
+- Environment variables with full substitution support
+- Build configuration parsing with cacheFrom and options arrays
+- Lifecycle command execution with run-once behavior tracking
+- Signal handling and secure port defaults for Microsoft compatibility
+
+#### Testing and Quality Assurance
+- Comprehensive E2E test suite covering Microsoft universal devcontainer patterns
+- Feature specification compliance tests with real OCI registry integration
+- Advanced test coverage for feature options validation and lifecycle commands
+- Multi-stage build detection and feature integration testing
+- Microsoft DevContainer Features specification compliance verification
+
+### Changed
+- Updated default container to use Microsoft devcontainer features instead of manual tool installation
+- Enhanced container image references to use published devcontainer image
+- Improved symlink resolution for consistent container reconnection paths
+- Updated container name generation to match GitHub build standards
+
+### Fixed
+- Resolved symlinks for consistent container reconnection paths
+- Fixed workspaceFolder mapping and shell execution issues
+- Corrected port range validation with comprehensive edge case testing
+- Addressed E2E test port conflicts and build args scoping issues
+- Fixed container cleanup timeout warnings in E2E test suite
+- Resolved golangci-lint issues with local linting configuration
+
+### Technical Details
+- Microsoft DevContainer Features specification: Full compliance with official spec
+- Feature resolution priority: OCI registry → local features → fallback to manual installation
+- Build system: Multi-stage Docker builds with automatic feature detection
+- Feature caching: Image ID-based caching with oras CLI integration
+- Variable substitution: Complete ${localEnv:VAR} and ${containerEnv:VAR} support
+
+### Documentation
+- Comprehensive devcontainer implementation documentation
+- Microsoft DevContainer Features specification compliance analysis
+- Complete feature analysis and implementation recommendations
+- Enhanced AI agent documentation with clear value propositions
+- Updated README with OpenCode AI and enhanced devcontainer support
+
 ## [v1.1.0] - 2025-11-03
 
 ### Added

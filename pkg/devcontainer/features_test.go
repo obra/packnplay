@@ -25,6 +25,7 @@ func skipIfNoDocker(t *testing.T) {
 	}
 }
 
+
 func TestResolveLocalFeature(t *testing.T) {
 	// Create temp directory for test feature
 	tmpDir := t.TempDir()

@@ -122,7 +122,7 @@ func TestDirectoryCreation(t *testing.T) {
 	}
 
 	// Should create parent directories
-	expectedCommand := []string{"mkdir", "-p", "/Users/jesse/Documents/GitHub/very/deep/project"}
+	expectedCommand := []string{"/bin/mkdir", "-p", "/Users/jesse/Documents/GitHub/very/deep/project"}
 	if !commandsContain(dirCommands, expectedCommand) {
 		t.Errorf("Expected mkdir command %v not found in: %v", expectedCommand, dirCommands)
 	}

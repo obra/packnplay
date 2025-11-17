@@ -268,3 +268,4 @@ func isDockerAvailable() bool {
 	cmd := exec.Command("docker", "info")
 	return cmd.Run() == nil
 }
+
