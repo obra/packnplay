@@ -140,7 +140,7 @@ jobs:
       - name: Delete old daily images
         uses: actions/delete-package-versions@v4
         with:
-          package-name: devcontainer
+          package-name: packnplay/devcontainer
           package-type: container
           min-versions-to-keep: 7 # Keep last 7 daily builds
           delete-only-untagged-versions: false
