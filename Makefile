@@ -1,4 +1,4 @@
-.PHONY: build install test clean docker-build docker-push lint lint-fix help
+.PHONY: build install test clean docker-build docker-push lint lint-fix docs help
 
 # Binary name
 BINARY := packnplay
@@ -23,6 +23,17 @@ LDFLAGS := -ldflags "-X 'github.com/obra/packnplay/cmd.version=$(VERSION)' -X 'g
 
 help: ## Show this help
 	@echo "Available targets:"
+	@echo "  Build targets:"
+	@echo "    build       Build binary with version info"
+	@echo "    install     Install to GOPATH/bin with version info"
+	@echo "  Quality targets:"
+	@echo "    test        Run tests"
+	@echo "    lint        Run golangci-lint"
+	@echo "  Utility targets:"
+	@echo "    clean       Clean build artifacts"
+	@echo "    docs        Show documentation links"
+	@echo "    help        Show this help"
+	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 
 build: ## Build the binary
@@ -43,6 +54,11 @@ lint: ## Run golangci-lint
 
 lint-fix: ## Run golangci-lint with auto-fix
 	golangci-lint run --fix
+
+docs: ## Show documentation links
+	@echo "Build documentation: docs/building.md"
+	@echo "Release process: docs/release-process.md"
+	@echo "Release engineering: docs/release-engineering.md"
 
 clean: ## Clean build artifacts
 	$(GOCLEAN)
