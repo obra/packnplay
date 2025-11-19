@@ -90,7 +90,7 @@ brews:
     install: |
       bin.install "packnplay"
     test: |
-      system "#{bin}/packnplay", "--version"
+      system "#{bin}/packnplay", "version"
 
 release:
   github:
