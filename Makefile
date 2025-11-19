@@ -13,15 +13,23 @@ GOINSTALL := $(GOCMD) install
 GOTEST := $(GOCMD) test
 GOCLEAN := $(GOCMD) clean
 
+# Version information
+VERSION := $(shell git describe --tags --always)
+COMMIT := $(shell git rev-parse HEAD)
+BUILD_DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+
+# Linker flags for version injection
+LDFLAGS := -ldflags "-X 'github.com/obra/packnplay/cmd.version=$(VERSION)' -X 'github.com/obra/packnplay/cmd.commit=$(COMMIT)' -X 'github.com/obra/packnplay/cmd.date=$(BUILD_DATE)'"
+
 help: ## Show this help
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 
 build: ## Build the binary
-	$(GOBUILD) -o $(BINARY) .
+	$(GOBUILD) $(LDFLAGS) -o $(BINARY) .
 
 install: ## Install the binary to GOPATH/bin
-	$(GOINSTALL)
+	$(GOINSTALL) $(LDFLAGS)
 
 test: ## Run tests
 	$(GOTEST) -v ./...
