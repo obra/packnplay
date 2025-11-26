@@ -135,6 +135,8 @@ jobs:
     needs: [build-and-push, test-image]
     runs-on: ubuntu-latest
     if: success()
+    permissions:
+      packages: write
 
     steps:
       - name: Delete old daily images

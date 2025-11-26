@@ -31,3 +31,13 @@ test-mount-feature/
 .worktrees/
 vendor/
 packnplay-debug
+
+# Claude Code local settings (contains user-specific permissions)
+.claude/settings.local.json
+
+# Private journal entries
+.private-journal/
+
+# DevContainer build artifacts and cache
+.devcontainer/Dockerfile.generated
+.devcontainer/oci-cache/
