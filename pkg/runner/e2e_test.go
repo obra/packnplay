@@ -1243,6 +1243,30 @@ func TestE2E_PostCreateCommand_RunsOnce(t *testing.T) {
 	require.Equal(t, firstHash, secondHash, "Hash should not change (postCreate didn't re-run)")
 }
 
+// TestE2E_UpdateContentCommand tests that updateContentCommand runs after workspace is mounted
+func TestE2E_UpdateContentCommand(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+  "image": "alpine:latest",
+  "updateContentCommand": "touch /tmp/update-content-ran"
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+
+	// Run packnplay - updateContentCommand should execute
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "test", "-f", "/tmp/update-content-ran")
+	require.NoError(t, err, "updateContentCommand should have created file: %s", output)
+
+	// Verify the file exists
+	checkOutput, checkErr := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "ls", "-la", "/tmp/update-content-ran")
+	require.NoError(t, checkErr, "File should exist: %s", checkOutput)
+}
+
 // TestE2E_PostStartCommand_RunsEveryTime tests that postStart runs every time
 func TestE2E_PostStartCommand_RunsEveryTime(t *testing.T) {
 	skipIfNoDocker(t)

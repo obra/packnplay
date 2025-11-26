@@ -1015,9 +1015,10 @@ func Run(config *RunConfig) error {
 			if len(resolvedFeatures) > 0 {
 				merger := devcontainer.NewLifecycleMerger()
 				userCommands := map[string]*devcontainer.LifecycleCommand{
-					"onCreateCommand":   devConfig.OnCreateCommand,
-					"postCreateCommand": devConfig.PostCreateCommand,
-					"postStartCommand":  devConfig.PostStartCommand,
+					"onCreateCommand":      devConfig.OnCreateCommand,
+					"updateContentCommand": devConfig.UpdateContentCommand,
+					"postCreateCommand":    devConfig.PostCreateCommand,
+					"postStartCommand":     devConfig.PostStartCommand,
 				}
 				mergedCommands = merger.MergeCommands(resolvedFeatures, userCommands)
 			}
@@ -1025,12 +1026,16 @@ func Run(config *RunConfig) error {
 
 		// Use merged commands if available, otherwise use user commands directly
 		onCreateCmd := devConfig.OnCreateCommand
+		updateContentCmd := devConfig.UpdateContentCommand
 		postCreateCmd := devConfig.PostCreateCommand
 		postStartCmd := devConfig.PostStartCommand
 
 		if mergedCommands != nil {
 			if cmd, exists := mergedCommands["onCreateCommand"]; exists {
 				onCreateCmd = cmd
+			}
+			if cmd, exists := mergedCommands["updateContentCommand"]; exists {
+				updateContentCmd = cmd
 			}
 			if cmd, exists := mergedCommands["postCreateCommand"]; exists {
 				postCreateCmd = cmd
@@ -1047,6 +1052,17 @@ func Run(config *RunConfig) error {
 			}
 			if err := executor.Execute("onCreate", onCreateCmd); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: onCreateCommand failed: %v\n", err)
+			}
+		}
+
+		// updateContentCommand - runs after workspace content is mounted (e.g., 'npm install')
+		// Runs once on creation, re-runs if command changes
+		if updateContentCmd != nil {
+			if config.Verbose {
+				fmt.Fprintf(os.Stderr, "Running updateContentCommand...\n")
+			}
+			if err := executor.Execute("updateContent", updateContentCmd); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: updateContentCommand failed: %v\n", err)
 			}
 		}
 
