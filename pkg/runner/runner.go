@@ -59,7 +59,8 @@ func NewFeaturePropertiesApplier() *FeaturePropertiesApplier {
 
 // ApplyFeatureProperties applies feature container properties to Docker args and environment
 // ctx parameter added for variable substitution in mount strings
-func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, features []*devcontainer.ResolvedFeature, baseEnv map[string]string, ctx *devcontainer.SubstituteContext) ([]string, map[string]string) {
+// Returns enhanced args, enhanced env, and any entrypoint args that should be prepended to the command
+func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, features []*devcontainer.ResolvedFeature, baseEnv map[string]string, ctx *devcontainer.SubstituteContext) ([]string, map[string]string, []string) {
 	enhancedArgs := make([]string, len(baseArgs))
 	copy(enhancedArgs, baseArgs)
 
@@ -67,6 +68,8 @@ func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, fea
 	for k, v := range baseEnv {
 		enhancedEnv[k] = v
 	}
+
+	var entrypointArgs []string
 
 	for _, feature := range features {
 		if feature.Metadata == nil {
@@ -96,7 +99,11 @@ func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, fea
 
 		// Apply entrypoint
 		if len(metadata.Entrypoint) > 0 {
-			enhancedArgs = append(enhancedArgs, "--entrypoint="+strings.Join(metadata.Entrypoint, " "))
+			enhancedArgs = append(enhancedArgs, "--entrypoint="+metadata.Entrypoint[0])
+			// Store remaining entrypoint elements to be prepended to command
+			if len(metadata.Entrypoint) > 1 {
+				entrypointArgs = metadata.Entrypoint[1:]
+			}
 		}
 
 		// NOTE: ContainerEnv from features is set in the Dockerfile as ENV statements
@@ -114,7 +121,7 @@ func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, fea
 		}
 	}
 
-	return enhancedArgs, enhancedEnv
+	return enhancedArgs, enhancedEnv, entrypointArgs
 }
 
 // getTTYFlags returns appropriate TTY flags for docker commands
@@ -820,6 +827,9 @@ func Run(config *RunConfig) error {
 		args = append(args, substitutedArg)
 	}
 
+	// Track entrypoint args from features (declared here so it's available later)
+	var entrypointArgs []string
+
 	// Apply feature-contributed container properties (security options, capabilities, etc.)
 	if len(devConfig.Features) > 0 {
 		// Resolve features for properties application
@@ -871,7 +881,7 @@ func Run(config *RunConfig) error {
 
 			// Apply feature properties with variable substitution
 			var enhancedEnv map[string]string
-			args, enhancedEnv = applier.ApplyFeatureProperties(args, resolvedFeatures, currentEnv, ctx)
+			args, enhancedEnv, entrypointArgs = applier.ApplyFeatureProperties(args, resolvedFeatures, currentEnv, ctx)
 
 			// Add feature-contributed environment variables to docker args
 			// These go after devcontainer env but can still be overridden by user --env flags
@@ -890,7 +900,16 @@ func Run(config *RunConfig) error {
 
 	// Add signal-aware command that keeps container alive (Microsoft pattern)
 	// This provides graceful shutdown handling for SIGTERM/SIGINT
-	args = append(args, "/bin/sh", "-c", "echo 'Container started' && trap 'exit 0' 15 && while true; do sleep 1 & wait $!; done")
+	// If a feature provides entrypoint args (e.g., ["/bin/sh", "-c"]), prepend them to the command
+	if len(entrypointArgs) > 0 {
+		// Feature provided an entrypoint like ["/bin/sh", "-c"]
+		// The first element is set via --entrypoint, remaining elements are command args
+		args = append(args, entrypointArgs...)
+		args = append(args, "echo 'Container started' && trap 'exit 0' 15 && while true; do sleep 1 & wait $!; done")
+	} else {
+		// No feature entrypoint, use default /bin/sh -c wrapper
+		args = append(args, "/bin/sh", "-c", "echo 'Container started' && trap 'exit 0' 15 && while true; do sleep 1 & wait $!; done")
+	}
 
 	// Step 9: Start container in background
 	if config.Verbose {

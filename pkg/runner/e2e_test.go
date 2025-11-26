@@ -2592,9 +2592,9 @@ touch /tmp/marker
 	require.NoError(t, err, "Failed to inspect container entrypoint: %s", string(entrypointOutput))
 
 	// Docker returns JSON array of entrypoint components
+	// Note: Docker's --entrypoint flag only accepts the executable, additional args go to Cmd
 	entrypointStr := strings.TrimSpace(string(entrypointOutput))
-	require.Contains(t, entrypointStr, "/bin/sh", "Container entrypoint should contain /bin/sh")
-	require.Contains(t, entrypointStr, "-c", "Container entrypoint should contain -c flag")
+	require.Contains(t, entrypointStr, "/bin/sh", "Container entrypoint should be set to /bin/sh")
 
 	t.Log("Entrypoint feature test completed successfully!")
 	t.Logf("Container: %s", containerName)
