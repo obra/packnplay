@@ -2220,3 +2220,78 @@ func TestE2E_MicrosoftUniversalPattern(t *testing.T) {
 	t.Logf("Validated user: vscode")
 	t.Logf("Container: %s", containerName)
 }
+
+// TestE2E_FeaturePrivilegedMode tests that a local feature requesting privileged mode
+// results in the container running with --privileged flag
+func TestE2E_FeaturePrivilegedMode(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create minimal install script
+	installScript := `#!/bin/sh
+set -e
+touch /tmp/marker
+`
+
+	// Create project with local feature that requests privileged mode
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"features": {
+				"./local-features/privileged-feature": {}
+			}
+		}`,
+		".devcontainer/local-features/privileged-feature/devcontainer-feature.json": `{
+			"id": "privileged-feature",
+			"version": "1.0.0",
+			"name": "Privileged Feature",
+			"description": "A feature that requires privileged mode",
+			"privileged": true
+		}`,
+		".devcontainer/local-features/privileged-feature/install.sh": installScript,
+	})
+	defer os.RemoveAll(projectDir)
+
+	// Initialize git repo (required for NoWorktree mode)
+	gitInitCmd := exec.Command("git", "init")
+	gitInitCmd.Dir = projectDir
+	if err := gitInitCmd.Run(); err != nil {
+		t.Fatalf("Failed to initialize git repo: %v", err)
+	}
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run packnplay with NoWorktree mode (with verbose to see if privileged is applied)
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--verbose", "echo", "privileged test success")
+	require.NoError(t, err, "Failed to run with privileged feature: %s", output)
+	require.Contains(t, output, "privileged test success")
+	t.Logf("Build output:\n%s", output)
+
+	// Verify the feature installed
+	markerOutput, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "test", "-f", "/tmp/marker")
+	require.NoError(t, err, "Feature marker should exist: %s", markerOutput)
+
+	// Verify container is running with --privileged flag
+	containerID := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID, "Container ID should be found")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	inspectCmd := exec.CommandContext(ctx, "docker", "inspect", containerID, "--format", "{{.HostConfig.Privileged}}")
+	privilegedOutput, err := inspectCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to inspect container privileged mode: %s", string(privilegedOutput))
+
+	// Docker returns "true" or "false" as a string
+	require.Contains(t, strings.TrimSpace(string(privilegedOutput)), "true", "Container should be running in privileged mode")
+
+	t.Log("Privileged mode feature test completed successfully!")
+	t.Logf("Container: %s", containerName)
+	t.Logf("Privileged: %s", strings.TrimSpace(string(privilegedOutput)))
+}

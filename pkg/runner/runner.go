@@ -836,7 +836,14 @@ func Run(config *RunConfig) error {
 				continue
 			}
 
-			feature, err := resolver.ResolveFeature(reference, optionsMap)
+			// Use absolute path if provided, otherwise resolve relative to .devcontainer
+			// Don't modify OCI registry references (they contain registry domains)
+			fullPath := reference
+			if !filepath.IsAbs(reference) && !strings.Contains(reference, "ghcr.io/") && !strings.Contains(reference, "mcr.microsoft.com/") {
+				fullPath = filepath.Join(mountPath, ".devcontainer", reference)
+			}
+
+			feature, err := resolver.ResolveFeature(fullPath, optionsMap)
 			if err != nil {
 				if config.Verbose {
 					fmt.Fprintf(os.Stderr, "Warning: failed to resolve feature %s for properties: %v\n", reference, err)
@@ -972,7 +979,7 @@ func Run(config *RunConfig) error {
 				// Don't modify OCI registry references (they contain registry domains)
 				fullPath := reference
 				if !filepath.IsAbs(reference) && !strings.Contains(reference, "ghcr.io/") && !strings.Contains(reference, "mcr.microsoft.com/") {
-					fullPath = filepath.Join(workDir, ".devcontainer", reference)
+					fullPath = filepath.Join(mountPath, ".devcontainer", reference)
 				}
 
 				feature, err := resolver.ResolveFeature(fullPath, optionsMap)
