@@ -963,7 +963,7 @@ func Run(config *RunConfig) error {
 	// Step 11: Execute lifecycle commands from devcontainer.json
 	// Commands are tracked: onCreate/postCreate run once, postStart always runs
 	// Feature lifecycle commands execute before user commands per specification
-	hasLifecycleCommands := devConfig.OnCreateCommand != nil || devConfig.PostCreateCommand != nil || devConfig.PostStartCommand != nil
+	hasLifecycleCommands := devConfig.OnCreateCommand != nil || devConfig.UpdateContentCommand != nil || devConfig.PostCreateCommand != nil || devConfig.PostStartCommand != nil
 	hasFeatures := len(devConfig.Features) > 0
 
 	if hasLifecycleCommands || hasFeatures {
