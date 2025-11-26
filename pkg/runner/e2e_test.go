@@ -2600,3 +2600,84 @@ touch /tmp/marker
 	t.Logf("Container: %s", containerName)
 	t.Logf("Entrypoint: %s", entrypointStr)
 }
+
+// TestE2E_FeatureMounts verifies that a feature with mounts in metadata
+// results in those mounts being added to the container
+func TestE2E_FeatureMounts(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create minimal install script
+	installScript := `#!/bin/sh
+set -e
+touch /tmp/marker
+`
+
+	// Create project with local feature that includes mounts
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"features": {
+				"./local-features/mount-feature": {}
+			}
+		}`,
+		".devcontainer/local-features/mount-feature/devcontainer-feature.json": `{
+			"id": "mount-feature",
+			"version": "1.0.0",
+			"name": "Mount Feature",
+			"mounts": [
+				{
+					"type": "tmpfs",
+					"target": "/feature-tmpfs"
+				}
+			]
+		}`,
+		".devcontainer/local-features/mount-feature/install.sh": installScript,
+	})
+	defer os.RemoveAll(projectDir)
+
+	// Initialize git repo (required for NoWorktree mode)
+	gitInitCmd := exec.Command("git", "init")
+	gitInitCmd.Dir = projectDir
+	if err := gitInitCmd.Run(); err != nil {
+		t.Fatalf("Failed to initialize git repo: %v", err)
+	}
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run packnplay with NoWorktree mode (with verbose to see if mounts are applied)
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--verbose", "echo", "mount test success")
+	require.NoError(t, err, "Failed to run with mount feature: %s", output)
+	require.Contains(t, output, "mount test success")
+	t.Logf("Build output:\n%s", output)
+
+	// Verify the feature installed
+	markerOutput, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "test", "-f", "/tmp/marker")
+	require.NoError(t, err, "Feature marker should exist: %s", markerOutput)
+
+	// Verify container has the requested mount
+	containerID := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID, "Container ID should be found")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	inspectCmd := exec.CommandContext(ctx, "docker", "inspect", containerID, "--format", "{{json .Mounts}}")
+	mountsOutput, err := inspectCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to inspect container mounts: %s", string(mountsOutput))
+
+	// Verify the mount exists and is a tmpfs mount
+	mountsStr := strings.TrimSpace(string(mountsOutput))
+	require.Contains(t, mountsStr, "/feature-tmpfs", "Container should have /feature-tmpfs mount")
+	require.Contains(t, mountsStr, "tmpfs", "Mount should be of type tmpfs")
+
+	t.Log("Mounts feature test completed successfully!")
+	t.Logf("Container: %s", containerName)
+	t.Logf("Mounts: %s", mountsStr)
+}
