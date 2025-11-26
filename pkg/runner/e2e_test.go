@@ -2295,3 +2295,80 @@ touch /tmp/marker
 	t.Logf("Container: %s", containerName)
 	t.Logf("Privileged: %s", strings.TrimSpace(string(privilegedOutput)))
 }
+
+// TestE2E_FeatureCapAdd tests that a local feature requesting capAdd
+// results in the container having those Linux capabilities
+func TestE2E_FeatureCapAdd(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create minimal install script
+	installScript := `#!/bin/sh
+set -e
+touch /tmp/marker
+`
+
+	// Create project with local feature that requests capAdd
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"features": {
+				"./local-features/cap-feature": {}
+			}
+		}`,
+		".devcontainer/local-features/cap-feature/devcontainer-feature.json": `{
+			"id": "cap-feature",
+			"version": "1.0.0",
+			"name": "CapAdd Feature",
+			"description": "A feature that requires NET_ADMIN and SYS_PTRACE capabilities",
+			"capAdd": ["NET_ADMIN", "SYS_PTRACE"]
+		}`,
+		".devcontainer/local-features/cap-feature/install.sh": installScript,
+	})
+	defer os.RemoveAll(projectDir)
+
+	// Initialize git repo (required for NoWorktree mode)
+	gitInitCmd := exec.Command("git", "init")
+	gitInitCmd.Dir = projectDir
+	if err := gitInitCmd.Run(); err != nil {
+		t.Fatalf("Failed to initialize git repo: %v", err)
+	}
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run packnplay with NoWorktree mode (with verbose to see if capAdd is applied)
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--verbose", "echo", "capAdd test success")
+	require.NoError(t, err, "Failed to run with capAdd feature: %s", output)
+	require.Contains(t, output, "capAdd test success")
+	t.Logf("Build output:\n%s", output)
+
+	// Verify the feature installed
+	markerOutput, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "test", "-f", "/tmp/marker")
+	require.NoError(t, err, "Feature marker should exist: %s", markerOutput)
+
+	// Verify container has the requested capabilities
+	containerID := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID, "Container ID should be found")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	inspectCmd := exec.CommandContext(ctx, "docker", "inspect", containerID, "--format", "{{json .HostConfig.CapAdd}}")
+	capAddOutput, err := inspectCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to inspect container capAdd: %s", string(capAddOutput))
+
+	// Docker returns JSON array of capabilities
+	capAddStr := strings.TrimSpace(string(capAddOutput))
+	require.Contains(t, capAddStr, "NET_ADMIN", "Container should have NET_ADMIN capability")
+	require.Contains(t, capAddStr, "SYS_PTRACE", "Container should have SYS_PTRACE capability")
+
+	t.Log("CapAdd feature test completed successfully!")
+	t.Logf("Container: %s", containerName)
+	t.Logf("CapAdd: %s", capAddStr)
+}
