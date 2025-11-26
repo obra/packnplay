@@ -2372,3 +2372,231 @@ touch /tmp/marker
 	t.Logf("Container: %s", containerName)
 	t.Logf("CapAdd: %s", capAddStr)
 }
+
+// TestE2E_FeatureSecurityOpt tests that a local feature requesting securityOpt
+// results in the container having those security options
+func TestE2E_FeatureSecurityOpt(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create minimal install script
+	installScript := `#!/bin/sh
+set -e
+touch /tmp/marker
+`
+
+	// Create project with local feature that requests securityOpt
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"features": {
+				"./local-features/security-feature": {}
+			}
+		}`,
+		".devcontainer/local-features/security-feature/devcontainer-feature.json": `{
+			"id": "security-feature",
+			"version": "1.0.0",
+			"name": "Security Feature",
+			"description": "A feature that requires seccomp=unconfined",
+			"securityOpt": ["seccomp=unconfined"]
+		}`,
+		".devcontainer/local-features/security-feature/install.sh": installScript,
+	})
+	defer os.RemoveAll(projectDir)
+
+	// Initialize git repo (required for NoWorktree mode)
+	gitInitCmd := exec.Command("git", "init")
+	gitInitCmd.Dir = projectDir
+	if err := gitInitCmd.Run(); err != nil {
+		t.Fatalf("Failed to initialize git repo: %v", err)
+	}
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run packnplay with NoWorktree mode (with verbose to see if securityOpt is applied)
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--verbose", "echo", "securityOpt test success")
+	require.NoError(t, err, "Failed to run with securityOpt feature: %s", output)
+	require.Contains(t, output, "securityOpt test success")
+	t.Logf("Build output:\n%s", output)
+
+	// Verify the feature installed
+	markerOutput, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "test", "-f", "/tmp/marker")
+	require.NoError(t, err, "Feature marker should exist: %s", markerOutput)
+
+	// Verify container has the requested security options
+	containerID := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID, "Container ID should be found")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	inspectCmd := exec.CommandContext(ctx, "docker", "inspect", containerID, "--format", "{{json .HostConfig.SecurityOpt}}")
+	securityOptOutput, err := inspectCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to inspect container securityOpt: %s", string(securityOptOutput))
+
+	// Docker returns JSON array of security options
+	securityOptStr := strings.TrimSpace(string(securityOptOutput))
+	require.Contains(t, securityOptStr, "seccomp=unconfined", "Container should have seccomp=unconfined security option")
+
+	t.Log("SecurityOpt feature test completed successfully!")
+	t.Logf("Container: %s", containerName)
+	t.Logf("SecurityOpt: %s", securityOptStr)
+}
+
+// TestE2E_FeatureInit tests that a local feature with "init": true
+// results in the container having the --init flag (tini process)
+func TestE2E_FeatureInit(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create minimal install script
+	installScript := `#!/bin/sh
+set -e
+touch /tmp/marker
+`
+
+	// Create project with local feature that requests init
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"features": {
+				"./local-features/init-feature": {}
+			}
+		}`,
+		".devcontainer/local-features/init-feature/devcontainer-feature.json": `{
+			"id": "init-feature",
+			"version": "1.0.0",
+			"name": "Init Feature",
+			"description": "A feature that requires init process",
+			"init": true
+		}`,
+		".devcontainer/local-features/init-feature/install.sh": installScript,
+	})
+	defer os.RemoveAll(projectDir)
+
+	// Initialize git repo (required for NoWorktree mode)
+	gitInitCmd := exec.Command("git", "init")
+	gitInitCmd.Dir = projectDir
+	if err := gitInitCmd.Run(); err != nil {
+		t.Fatalf("Failed to initialize git repo: %v", err)
+	}
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run packnplay with NoWorktree mode (with verbose to see if init is applied)
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--verbose", "echo", "init test success")
+	require.NoError(t, err, "Failed to run with init feature: %s", output)
+	require.Contains(t, output, "init test success")
+	t.Logf("Build output:\n%s", output)
+
+	// Verify the feature installed
+	markerOutput, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "test", "-f", "/tmp/marker")
+	require.NoError(t, err, "Feature marker should exist: %s", markerOutput)
+
+	// Verify container is running with --init flag
+	containerID := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID, "Container ID should be found")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	inspectCmd := exec.CommandContext(ctx, "docker", "inspect", containerID, "--format", "{{.HostConfig.Init}}")
+	initOutput, err := inspectCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to inspect container init mode: %s", string(initOutput))
+
+	// Docker returns "true" or "false" as a string
+	require.Contains(t, strings.TrimSpace(string(initOutput)), "true", "Container should be running with init process")
+
+	t.Log("Init feature test completed successfully!")
+	t.Logf("Container: %s", containerName)
+	t.Logf("Init: %s", strings.TrimSpace(string(initOutput)))
+}
+
+// TestE2E_FeatureEntrypoint verifies that a feature with `"entrypoint": ["/bin/sh", "-c"]`
+// results in the container having that entrypoint
+func TestE2E_FeatureEntrypoint(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create minimal install script
+	installScript := `#!/bin/sh
+set -e
+touch /tmp/marker
+`
+
+	// Create project with local feature that sets entrypoint
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"features": {
+				"./local-features/entrypoint-feature": {}
+			}
+		}`,
+		".devcontainer/local-features/entrypoint-feature/devcontainer-feature.json": `{
+			"id": "entrypoint-feature",
+			"version": "1.0.0",
+			"name": "Entrypoint Feature",
+			"description": "A feature that sets a custom entrypoint",
+			"entrypoint": ["/bin/sh", "-c"]
+		}`,
+		".devcontainer/local-features/entrypoint-feature/install.sh": installScript,
+	})
+	defer os.RemoveAll(projectDir)
+
+	// Initialize git repo (required for NoWorktree mode)
+	gitInitCmd := exec.Command("git", "init")
+	gitInitCmd.Dir = projectDir
+	if err := gitInitCmd.Run(); err != nil {
+		t.Fatalf("Failed to initialize git repo: %v", err)
+	}
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run packnplay with NoWorktree mode (with verbose to see if entrypoint is applied)
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--verbose", "echo", "entrypoint test success")
+	require.NoError(t, err, "Failed to run with entrypoint feature: %s", output)
+	require.Contains(t, output, "entrypoint test success")
+	t.Logf("Build output:\n%s", output)
+
+	// Verify the feature installed
+	markerOutput, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "test", "-f", "/tmp/marker")
+	require.NoError(t, err, "Feature marker should exist: %s", markerOutput)
+
+	// Verify container has the requested entrypoint
+	containerID := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID, "Container ID should be found")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	inspectCmd := exec.CommandContext(ctx, "docker", "inspect", containerID, "--format", "{{json .Config.Entrypoint}}")
+	entrypointOutput, err := inspectCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to inspect container entrypoint: %s", string(entrypointOutput))
+
+	// Docker returns JSON array of entrypoint components
+	entrypointStr := strings.TrimSpace(string(entrypointOutput))
+	require.Contains(t, entrypointStr, "/bin/sh", "Container entrypoint should contain /bin/sh")
+	require.Contains(t, entrypointStr, "-c", "Container entrypoint should contain -c flag")
+
+	t.Log("Entrypoint feature test completed successfully!")
+	t.Logf("Container: %s", containerName)
+	t.Logf("Entrypoint: %s", entrypointStr)
+}
