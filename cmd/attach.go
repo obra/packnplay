@@ -10,6 +10,7 @@ import (
 
 	"github.com/mattn/go-isatty"
 	"github.com/obra/packnplay/pkg/container"
+	"github.com/obra/packnplay/pkg/devcontainer"
 	"github.com/obra/packnplay/pkg/docker"
 	"github.com/spf13/cobra"
 )
@@ -71,6 +72,19 @@ var attachCmd = &cobra.Command{
 
 		if strings.TrimSpace(output) != containerName {
 			return fmt.Errorf("no running container found for worktree '%s'", worktreeName)
+		}
+
+		// Run postAttachCommand if configured
+		devConfig, err := devcontainer.LoadConfig(workDir)
+		if err == nil && devConfig != nil && devConfig.PostAttachCommand != nil {
+			// Execute postAttachCommand in container
+			if cmdStr, ok := devConfig.PostAttachCommand.AsString(); ok && cmdStr != "" {
+				fmt.Fprintf(os.Stderr, "Running postAttachCommand...\n")
+				_, err := dockerClient.Run("exec", containerName, "/bin/sh", "-c", cmdStr)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: postAttachCommand failed: %v\n", err)
+				}
+			}
 		}
 
 		// Execute docker exec with interactive shell
