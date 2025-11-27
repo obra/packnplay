@@ -309,6 +309,13 @@ func Run(config *RunConfig) error {
 		devConfig = devcontainer.GetDefaultConfig(defaultImage)
 	}
 
+	// Step 3.5: Load lockfile if it exists
+	// This ensures consistent feature versions across image build, property resolution, and lifecycle merging
+	lockfile, err := devcontainer.LoadLockFile(mountPath)
+	if err != nil {
+		return fmt.Errorf("failed to load lockfile: %w", err)
+	}
+
 	// Step 4: Initialize container client
 	dockerClient, err := docker.NewClientWithRuntime(config.Runtime, config.Verbose)
 	if err != nil {
@@ -317,7 +324,7 @@ func Run(config *RunConfig) error {
 
 	// Step 5: Ensure image available using ImageManager service
 	imageManager := NewImageManager(dockerClient, config.Verbose)
-	if err := imageManager.EnsureAvailable(devConfig, mountPath); err != nil {
+	if err := imageManager.EnsureAvailableWithLockfile(devConfig, mountPath, lockfile); err != nil {
 		return fmt.Errorf("failed to ensure image: %w", err)
 	}
 
@@ -972,9 +979,8 @@ func Run(config *RunConfig) error {
 	// Apply feature-contributed container properties (security options, capabilities, etc.)
 	if len(devConfig.Features) > 0 {
 		// Resolve features for properties application
-		// Note: We don't load lockfile here as it's not critical for property resolution
-		// The main feature resolution happens during image build where lockfile IS loaded
-		resolver := devcontainer.NewFeatureResolver(filepath.Join(os.TempDir(), "packnplay-features-cache"), nil)
+		// Use the same lockfile loaded earlier to ensure consistent feature versions
+		resolver := devcontainer.NewFeatureResolver(filepath.Join(os.TempDir(), "packnplay-features-cache"), lockfile)
 
 		var resolvedFeatures []*devcontainer.ResolvedFeature
 		for reference, options := range devConfig.Features {
@@ -1122,9 +1128,8 @@ func Run(config *RunConfig) error {
 		var mergedCommands map[string]*devcontainer.LifecycleCommand
 		if hasFeatures {
 			// Resolve features for lifecycle merging
-			// Note: We don't load lockfile here as it's not critical for lifecycle resolution
-			// The main feature resolution happens during image build where lockfile IS loaded
-			resolver := devcontainer.NewFeatureResolver(filepath.Join(os.TempDir(), "packnplay-features-cache"), nil)
+			// Use the same lockfile loaded earlier to ensure consistent feature versions
+			resolver := devcontainer.NewFeatureResolver(filepath.Join(os.TempDir(), "packnplay-features-cache"), lockfile)
 
 			var resolvedFeatures []*devcontainer.ResolvedFeature
 			for reference, options := range devConfig.Features {

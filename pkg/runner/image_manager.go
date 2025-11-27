@@ -42,15 +42,25 @@ func NewImageManager(client DockerClient, verbose bool) *ImageManager {
 // If features are specified, it builds the image with features.
 // If an image name is specified, it pulls the image if not already present.
 // Returns an error if neither image nor Dockerfile is specified.
+// Deprecated: Use EnsureAvailableWithLockfile for consistent feature versioning.
 func (im *ImageManager) EnsureAvailable(devConfig *devcontainer.Config, projectPath string) error {
+	return im.EnsureAvailableWithLockfile(devConfig, projectPath, nil)
+}
+
+// EnsureAvailableWithLockfile ensures the container image is available locally with lockfile support.
+// If a Dockerfile is specified in devConfig, it builds the image.
+// If features are specified, it builds the image with features using locked versions from lockfile.
+// If an image name is specified, it pulls the image if not already present.
+// Returns an error if neither image nor Dockerfile is specified.
+func (im *ImageManager) EnsureAvailableWithLockfile(devConfig *devcontainer.Config, projectPath string, lockfile *devcontainer.LockFile) error {
 	// If features are specified, build with features
 	if len(devConfig.Features) > 0 {
-		return im.buildImage(devConfig, projectPath)
+		return im.buildImageWithLockfile(devConfig, projectPath, lockfile)
 	}
 
 	// If Dockerfile specified (either DockerFile or Build.Dockerfile), build it
 	if devConfig.HasDockerfile() {
-		return im.buildImage(devConfig, projectPath)
+		return im.buildImageWithLockfile(devConfig, projectPath, lockfile)
 	}
 
 	// Otherwise pull the image
@@ -92,7 +102,18 @@ func (im *ImageManager) pullImage(image string) error {
 // inspected with `docker history`. Users should not put secrets in build args.
 // For secrets, use containerEnv with ${localEnv:SECRET} variable substitution
 // which injects secrets at runtime without persisting them in the image.
+// Deprecated: Use buildImageWithLockfile for consistent feature versioning.
 func (im *ImageManager) buildImage(devConfig *devcontainer.Config, projectPath string) error {
+	return im.buildImageWithLockfile(devConfig, projectPath, nil)
+}
+
+// buildImageWithLockfile builds a container image from Dockerfile with lockfile support
+//
+// SECURITY WARNING: Build args are persisted in image metadata and can be
+// inspected with `docker history`. Users should not put secrets in build args.
+// For secrets, use containerEnv with ${localEnv:SECRET} variable substitution
+// which injects secrets at runtime without persisting them in the image.
+func (im *ImageManager) buildImageWithLockfile(devConfig *devcontainer.Config, projectPath string, lockfile *devcontainer.LockFile) error {
 	imageName := container.GenerateImageName(projectPath)
 
 	// Check if already built
@@ -107,7 +128,7 @@ func (im *ImageManager) buildImage(devConfig *devcontainer.Config, projectPath s
 
 	// Process features if present
 	if len(devConfig.Features) > 0 {
-		return im.buildWithFeatures(devConfig, projectPath, imageName)
+		return im.buildWithFeaturesAndLockfile(devConfig, projectPath, imageName, lockfile)
 	}
 
 	// Use GetDockerfile() helper which checks both DockerFile and Build.Dockerfile
@@ -159,11 +180,21 @@ func (im *ImageManager) buildImage(devConfig *devcontainer.Config, projectPath s
 }
 
 // buildWithFeatures builds a container image with devcontainer features
+// Deprecated: Use buildWithFeaturesAndLockfile for consistent feature versioning.
 func (im *ImageManager) buildWithFeatures(devConfig *devcontainer.Config, projectPath string, imageName string) error {
-	// Load lockfile if it exists
-	lockfile, err := devcontainer.LoadLockFile(projectPath)
-	if err != nil {
-		return fmt.Errorf("failed to load lockfile: %w", err)
+	return im.buildWithFeaturesAndLockfile(devConfig, projectPath, imageName, nil)
+}
+
+// buildWithFeaturesAndLockfile builds a container image with devcontainer features using provided lockfile
+func (im *ImageManager) buildWithFeaturesAndLockfile(devConfig *devcontainer.Config, projectPath string, imageName string, lockfile *devcontainer.LockFile) error {
+	// If lockfile not provided, try to load it
+	// This maintains backward compatibility but the caller should ideally provide it
+	if lockfile == nil {
+		var err error
+		lockfile, err = devcontainer.LoadLockFile(projectPath)
+		if err != nil {
+			return fmt.Errorf("failed to load lockfile: %w", err)
+		}
 	}
 
 	// Resolve features

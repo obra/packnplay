@@ -183,3 +183,124 @@ func TestConfig_AllLifecycleCommands(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "echo attached", cmd)
 }
+
+func TestLoadLockFile(t *testing.T) {
+	tests := []struct {
+		name        string
+		setupFunc   func(tmpDir string) error
+		wantLockfile *LockFile
+		wantErr     bool
+	}{
+		{
+			name: "valid lockfile with multiple features",
+			setupFunc: func(tmpDir string) error {
+				devcontainerDir := filepath.Join(tmpDir, ".devcontainer")
+				if err := os.Mkdir(devcontainerDir, 0755); err != nil {
+					return err
+				}
+
+				lockContent := `{
+					"features": {
+						"ghcr.io/devcontainers/features/node:1": {
+							"version": "1.2.3",
+							"resolved": "ghcr.io/devcontainers/features/node@sha256:abc123"
+						},
+						"ghcr.io/devcontainers/features/docker-in-docker:2": {
+							"version": "2.0.0",
+							"resolved": "ghcr.io/devcontainers/features/docker-in-docker@sha256:def456"
+						}
+					}
+				}`
+
+				return os.WriteFile(
+					filepath.Join(devcontainerDir, "devcontainer-lock.json"),
+					[]byte(lockContent),
+					0644,
+				)
+			},
+			wantLockfile: &LockFile{
+				Features: map[string]LockedFeature{
+					"ghcr.io/devcontainers/features/node:1": {
+						Version:  "1.2.3",
+						Resolved: "ghcr.io/devcontainers/features/node@sha256:abc123",
+					},
+					"ghcr.io/devcontainers/features/docker-in-docker:2": {
+						Version:  "2.0.0",
+						Resolved: "ghcr.io/devcontainers/features/docker-in-docker@sha256:def456",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing lockfile returns nil without error",
+			setupFunc: func(tmpDir string) error {
+				// Create .devcontainer dir but no lockfile
+				devcontainerDir := filepath.Join(tmpDir, ".devcontainer")
+				return os.Mkdir(devcontainerDir, 0755)
+			},
+			wantLockfile: nil,
+			wantErr:      false,
+		},
+		{
+			name: "invalid JSON returns error",
+			setupFunc: func(tmpDir string) error {
+				devcontainerDir := filepath.Join(tmpDir, ".devcontainer")
+				if err := os.Mkdir(devcontainerDir, 0755); err != nil {
+					return err
+				}
+
+				// Write invalid JSON
+				return os.WriteFile(
+					filepath.Join(devcontainerDir, "devcontainer-lock.json"),
+					[]byte(`{invalid json`),
+					0644,
+				)
+			},
+			wantLockfile: nil,
+			wantErr:      true,
+		},
+		{
+			name: "empty features map",
+			setupFunc: func(tmpDir string) error {
+				devcontainerDir := filepath.Join(tmpDir, ".devcontainer")
+				if err := os.Mkdir(devcontainerDir, 0755); err != nil {
+					return err
+				}
+
+				lockContent := `{"features": {}}`
+
+				return os.WriteFile(
+					filepath.Join(devcontainerDir, "devcontainer-lock.json"),
+					[]byte(lockContent),
+					0644,
+				)
+			},
+			wantLockfile: &LockFile{
+				Features: map[string]LockedFeature{},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+
+			if tt.setupFunc != nil {
+				err := tt.setupFunc(tmpDir)
+				require.NoError(t, err, "setup function should not fail")
+			}
+
+			lockfile, err := LoadLockFile(tmpDir)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, lockfile)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantLockfile, lockfile)
+			}
+		})
+	}
+}
