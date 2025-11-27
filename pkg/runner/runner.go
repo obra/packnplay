@@ -146,6 +146,64 @@ func getTTYFlags() []string {
 	return []string{"-i"} // Interactive only (no TTY)
 }
 
+// executePostStart runs postStartCommand if defined, handling metadata tracking
+func executePostStart(dockerClient *docker.Client, containerID string, remoteUser string, verbose bool, postStartCommand *devcontainer.LifecycleCommand) error {
+	if postStartCommand == nil {
+		return nil
+	}
+
+	// Load metadata for lifecycle tracking
+	metadata, err := LoadMetadata(containerID)
+	if err != nil {
+		if verbose {
+			fmt.Fprintf(os.Stderr, "Warning: failed to load metadata: %v\n", err)
+		}
+		metadata = nil
+	}
+
+	executor := NewLifecycleExecutor(dockerClient, containerID, remoteUser, verbose, metadata)
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "Running postStartCommand...\n")
+	}
+	if err := executor.Execute("postStart", postStartCommand); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: postStartCommand failed: %v\n", err)
+	}
+
+	// Save metadata after lifecycle execution
+	if metadata != nil {
+		if err := SaveMetadata(metadata); err != nil {
+			if verbose {
+				fmt.Fprintf(os.Stderr, "Warning: failed to save metadata: %v\n", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// execIntoContainer replaces the current process with docker exec into the container
+func execIntoContainer(dockerClient *docker.Client, containerID string, remoteUser string, workingDir string, command []string) error {
+	cmdPath, err := exec.LookPath(dockerClient.Command())
+	if err != nil {
+		return fmt.Errorf("failed to find docker command: %w", err)
+	}
+
+	execArgs := []string{filepath.Base(cmdPath), "exec"}
+	execArgs = append(execArgs, getTTYFlags()...)
+
+	// Add user flag to exec if remoteUser is specified
+	if remoteUser != "" {
+		execArgs = append(execArgs, "--user", remoteUser)
+	}
+
+	execArgs = append(execArgs, "-w", workingDir, containerID)
+	execArgs = append(execArgs, command...)
+
+	// Use syscall.Exec to replace current process
+	return syscall.Exec(cmdPath, execArgs, os.Environ())
+}
+
 func Run(config *RunConfig) error {
 	// Step 1: Determine working directory
 	workDir := config.Path
@@ -422,58 +480,30 @@ func Run(config *RunConfig) error {
 		}
 
 		// Run postStart command if defined (postStart runs every time container is accessed)
-		if devConfig.PostStartCommand != nil {
-			// Load metadata for lifecycle tracking
-			metadata, err := LoadMetadata(containerID)
-			if err != nil {
-				if config.Verbose {
-					fmt.Fprintf(os.Stderr, "Warning: failed to load metadata: %v\n", err)
-				}
-				metadata = nil
-			}
+		if err := executePostStart(dockerClient, containerID, devConfig.RemoteUser, config.Verbose, devConfig.PostStartCommand); err != nil {
+			return err
+		}
 
-			executor := NewLifecycleExecutor(dockerClient, containerID, devConfig.RemoteUser, config.Verbose, metadata)
-
-			if config.Verbose {
-				fmt.Fprintf(os.Stderr, "Running postStartCommand...\n")
-			}
-			if err := executor.Execute("postStart", devConfig.PostStartCommand); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: postStartCommand failed: %v\n", err)
-			}
-
-			// Save metadata after lifecycle execution
-			if metadata != nil {
-				if err := SaveMetadata(metadata); err != nil {
-					if config.Verbose {
-						fmt.Fprintf(os.Stderr, "Warning: failed to save metadata: %v\n", err)
-					}
-				}
-			}
+		// Calculate working directory - respect workspaceFolder from devcontainer.json
+		// This should match the logic used in restart path and container creation
+		reconnectWorkingDir := mountPath
+		if devConfig.WorkspaceFolder != "" {
+			reconnectWorkingDir = devConfig.WorkspaceFolder
 		}
 
 		// Exec into existing container
-		cmdPath, err := exec.LookPath(dockerClient.Command())
-		if err != nil {
-			return fmt.Errorf("failed to find docker command: %w", err)
-		}
-
-		// Use host path as working directory
-		execArgs := []string{filepath.Base(cmdPath), "exec"}
-		execArgs = append(execArgs, getTTYFlags()...)
-
-		// Add user flag to exec if remoteUser is specified
-		if devConfig.RemoteUser != "" {
-			execArgs = append(execArgs, "--user", devConfig.RemoteUser)
-		}
-
-		execArgs = append(execArgs, "-w", workDir, containerID)
-		execArgs = append(execArgs, config.Command...)
-
-		return syscall.Exec(cmdPath, execArgs, os.Environ())
+		return execIntoContainer(dockerClient, containerID, devConfig.RemoteUser, reconnectWorkingDir, config.Command)
 	}
 
 	// Check for stopped container with same name and try to restart it
-	// This preserves container state (files, env vars) across restarts
+	// NOTE: Container restart preserves container state (files, environment variables,
+	// installed packages) but does NOT update creation-time configuration such as:
+	// - Port mappings (-p flags)
+	// - Volume mounts (-v flags)
+	// - Environment variables (-e flags)
+	// - Network settings
+	// To apply new configuration from devcontainer.json or CLI flags, you must
+	// stop and remove the container first with: packnplay stop <container-name>
 	if config.Verbose {
 		fmt.Fprintf(os.Stderr, "Checking for stopped container with same name...\n")
 	}
@@ -502,60 +532,19 @@ func Run(config *RunConfig) error {
 				containerID := existingID
 
 				// Run postStart command if defined (postStart runs every time container is accessed)
-				if devConfig.PostStartCommand != nil {
-					// Load metadata for lifecycle tracking
-					metadata, err := LoadMetadata(containerID)
-					if err != nil {
-						if config.Verbose {
-							fmt.Fprintf(os.Stderr, "Warning: failed to load metadata: %v\n", err)
-						}
-						metadata = nil
-					}
-
-					executor := NewLifecycleExecutor(dockerClient, containerID, devConfig.RemoteUser, config.Verbose, metadata)
-
-					if config.Verbose {
-						fmt.Fprintf(os.Stderr, "Running postStartCommand...\n")
-					}
-					if err := executor.Execute("postStart", devConfig.PostStartCommand); err != nil {
-						fmt.Fprintf(os.Stderr, "Warning: postStartCommand failed: %v\n", err)
-					}
-
-					// Save metadata after lifecycle execution
-					if metadata != nil {
-						if err := SaveMetadata(metadata); err != nil {
-							if config.Verbose {
-								fmt.Fprintf(os.Stderr, "Warning: failed to save metadata: %v\n", err)
-							}
-						}
-					}
-				}
-
-				// Exec into restarted container with user's command
-				cmdPath, err := exec.LookPath(dockerClient.Command())
-				if err != nil {
-					return fmt.Errorf("failed to find docker command: %w", err)
-				}
-
-				execArgs := []string{filepath.Base(cmdPath), "exec"}
-				execArgs = append(execArgs, getTTYFlags()...)
-
-				// Add user flag to exec if remoteUser is specified
-				if devConfig.RemoteUser != "" {
-					execArgs = append(execArgs, "--user", devConfig.RemoteUser)
+				if err := executePostStart(dockerClient, containerID, devConfig.RemoteUser, config.Verbose, devConfig.PostStartCommand); err != nil {
+					return err
 				}
 
 				// Calculate working directory - respect workspaceFolder from devcontainer.json
+				// This should match the logic used in reconnect path (workDir) and container creation
 				restartWorkingDir := mountPath
 				if devConfig.WorkspaceFolder != "" {
 					restartWorkingDir = devConfig.WorkspaceFolder
 				}
 
-				execArgs = append(execArgs, "-w", restartWorkingDir, containerID)
-				execArgs = append(execArgs, config.Command...)
-
-				// Use syscall.Exec to replace current process
-				return syscall.Exec(cmdPath, execArgs, os.Environ())
+				// Exec into restarted container with user's command
+				return execIntoContainer(dockerClient, containerID, devConfig.RemoteUser, restartWorkingDir, config.Command)
 			}
 
 			// Restart failed - log and fall through to recreation
