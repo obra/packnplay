@@ -270,7 +270,7 @@ Pack 'n Play creates git worktrees in XDG-compliant locations for isolation:
 
 ### Dev Container Support
 
-packnplay achieves **100% Microsoft devcontainer specification compliance**—complete, production-ready support for reproducible development environments. 🎉
+packnplay achieves **~90% Microsoft devcontainer specification compliance** for image/dockerfile workflows—production-ready support for reproducible development environments with comprehensive feature support.
 
 **Quick Example:**
 ```json
@@ -344,15 +344,24 @@ packnplay achieves **100% Microsoft devcontainer specification compliance**—co
 - **Signal Handling**: Graceful shutdown with SIGTERM
 - **Feature Integration**: Complete metadata processing
 
-#### **🚧 Minor Gaps (1% of specification)**
+#### **🚧 Known Gaps (~10% of specification)**
 
-**Would complete specification:**
-- ❌ Container restart (recreates stopped containers instead)
+**Not Supported:**
+- ❌ Docker Compose orchestration (`dockerComposeFile`, `service`, `runServices`)
+- ❌ Host requirements (`hostRequirements.cpus`, `.memory`, `.storage`, `.gpu`)
+- ❌ Advanced user management (`containerUser`, `updateRemoteUserUID`, `userEnvProbe`)
+- ❌ Lifecycle control properties (`overrideCommand`, `shutdownAction`)
+- ❌ `waitFor` lifecycle timing (defined but not enforced)
+- ❌ `updateContentCommand` execution (merged but not run)
+- ❌ `portsAttributes` application (parsed but not applied to containers)
+- ❌ `customizations` (VS Code-specific, intentionally excluded)
 
-**Advanced features:**
-- ❌ HTTPS tarball features (`https://example.com/feature.tgz`)
-- ❌ Private feature authentication
-- ❌ Lockfile support
+**Recently Implemented:**
+- ✅ Container restart behavior (reuses stopped containers)
+- ✅ HTTPS tarball features (`https://example.com/feature.tgz`)
+- ✅ Private feature authentication (via Docker credentials)
+- ✅ Lockfile support (`devcontainer-lock.json`)
+- ✅ `initializeCommand` (host-side pre-container execution)
 
 **See [GitHub Issues](https://github.com/obra/packnplay/issues?q=is%3Aissue+is%3Aopen+label%3Adevcontainer) for roadmap.**
 
