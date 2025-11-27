@@ -3290,3 +3290,62 @@ func TestE2E_Lockfile(t *testing.T) {
 	// will use "ghcr.io/devcontainers/features/node:1.2.0" instead of
 	// "ghcr.io/devcontainers/features/node:1" (latest)
 }
+
+// TestE2E_PortsAttributes tests that port labels are applied to containers
+// This verifies Task 7: portsAttributes implementation
+func TestE2E_PortsAttributes(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+  "image": "alpine:latest",
+  "forwardPorts": [3000, 8080],
+  "portsAttributes": {
+    "3000": {
+      "label": "Application",
+      "protocol": "https",
+      "onAutoForward": "openBrowser"
+    },
+    "8080": {
+      "label": "API Server",
+      "protocol": "http",
+      "onAutoForward": "notify"
+    }
+  }
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Start container
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "test")
+	require.NoError(t, err, "Failed to run packnplay: %s", output)
+
+	// Inspect container to verify port labels were applied
+	inspectData, err := inspectContainer(t, containerName)
+	require.NoError(t, err, "Failed to inspect container")
+
+	// Get labels from Config.Labels
+	labels, ok := inspectData["Config"].(map[string]interface{})["Labels"].(map[string]interface{})
+	require.True(t, ok, "Failed to get container labels")
+
+	// Verify port 3000 labels
+	assert.Equal(t, "Application", labels["devcontainer.port.3000.label"], "Port 3000 label should be 'Application'")
+	assert.Equal(t, "https", labels["devcontainer.port.3000.protocol"], "Port 3000 protocol should be 'https'")
+	assert.Equal(t, "openBrowser", labels["devcontainer.port.3000.onAutoForward"], "Port 3000 onAutoForward should be 'openBrowser'")
+
+	// Verify port 8080 labels
+	assert.Equal(t, "API Server", labels["devcontainer.port.8080.label"], "Port 8080 label should be 'API Server'")
+	assert.Equal(t, "http", labels["devcontainer.port.8080.protocol"], "Port 8080 protocol should be 'http'")
+	assert.Equal(t, "notify", labels["devcontainer.port.8080.onAutoForward"], "Port 8080 onAutoForward should be 'notify'")
+
+	t.Log("Port attributes verified successfully")
+}

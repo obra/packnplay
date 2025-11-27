@@ -19,6 +19,13 @@ type LockFile struct {
 	Features map[string]LockedFeature `json:"features"`
 }
 
+// PortAttributes represents attributes for a specific port
+type PortAttributes struct {
+	Label         string `json:"label,omitempty"`         // User-visible label for the port
+	Protocol      string `json:"protocol,omitempty"`      // http or https
+	OnAutoForward string `json:"onAutoForward,omitempty"` // notify, openBrowser, openPreview, silent, ignore
+}
+
 // Config represents a parsed devcontainer.json
 type Config struct {
 	// Basic container configuration
@@ -26,13 +33,14 @@ type Config struct {
 	DockerFile   string                 `json:"dockerFile"`
 	Build        *BuildConfig           `json:"build,omitempty"`
 	Name         string                 `json:"name,omitempty"`          // Display name for the dev container
-	RemoteUser   string                 `json:"remoteUser"`
-	ContainerEnv map[string]string      `json:"containerEnv,omitempty"`
-	RemoteEnv    map[string]string      `json:"remoteEnv,omitempty"`
-	ForwardPorts []interface{}          `json:"forwardPorts,omitempty"` // int or string
-	Mounts       []string               `json:"mounts,omitempty"`       // Docker mount syntax
-	RunArgs      []string               `json:"runArgs,omitempty"`      // Additional docker run arguments
-	Features     map[string]interface{} `json:"features,omitempty"`
+	RemoteUser      string                    `json:"remoteUser"`
+	ContainerEnv    map[string]string         `json:"containerEnv,omitempty"`
+	RemoteEnv       map[string]string         `json:"remoteEnv,omitempty"`
+	ForwardPorts    []interface{}             `json:"forwardPorts,omitempty"`    // int or string
+	PortsAttributes map[string]PortAttributes `json:"portsAttributes,omitempty"` // Port-specific metadata
+	Mounts          []string                  `json:"mounts,omitempty"`          // Docker mount syntax
+	RunArgs         []string                  `json:"runArgs,omitempty"`         // Additional docker run arguments
+	Features        map[string]interface{}    `json:"features,omitempty"`
 
 	// Workspace configuration - CRITICAL for proper workspace setup
 	WorkspaceFolder string `json:"workspaceFolder,omitempty"` // Path inside container where workspace should be

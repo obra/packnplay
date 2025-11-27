@@ -592,6 +592,24 @@ func Run(config *RunConfig) error {
 	// Add labels
 	args = append(args, container.LabelsToArgs(labels)...)
 
+	// Add port attributes as labels (for IDE integration and metadata)
+	if len(devConfig.PortsAttributes) > 0 {
+		for port, attrs := range devConfig.PortsAttributes {
+			if attrs.Label != "" {
+				args = append(args, "--label",
+					fmt.Sprintf("devcontainer.port.%s.label=%s", port, attrs.Label))
+			}
+			if attrs.Protocol != "" {
+				args = append(args, "--label",
+					fmt.Sprintf("devcontainer.port.%s.protocol=%s", port, attrs.Protocol))
+			}
+			if attrs.OnAutoForward != "" {
+				args = append(args, "--label",
+					fmt.Sprintf("devcontainer.port.%s.onAutoForward=%s", port, attrs.OnAutoForward))
+			}
+		}
+	}
+
 	// Add name
 	args = append(args, "--name", containerName)
 
