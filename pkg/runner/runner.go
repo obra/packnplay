@@ -472,10 +472,100 @@ func Run(config *RunConfig) error {
 		return syscall.Exec(cmdPath, execArgs, os.Environ())
 	}
 
-	// Remove any stopped containers with same name (required for clean start)
+	// Check for stopped container with same name and try to restart it
+	// This preserves container state (files, env vars) across restarts
 	if config.Verbose {
 		fmt.Fprintf(os.Stderr, "Checking for stopped container with same name...\n")
 	}
+
+	// Check if a container with this name exists (running or stopped)
+	existingID, err := dockerClient.Run("ps", "-aq", "--filter", fmt.Sprintf("name=^%s$", containerName))
+	existingID = strings.TrimSpace(existingID)
+
+	if err == nil && existingID != "" {
+		// Container exists - check if it's stopped
+		runningCheck, err := dockerClient.Run("ps", "-q", "--filter", fmt.Sprintf("name=^%s$", containerName))
+		runningCheck = strings.TrimSpace(runningCheck)
+
+		if err == nil && runningCheck == "" {
+			// Container exists but is not running - try to restart it
+			if config.Verbose {
+				fmt.Fprintf(os.Stderr, "Found stopped container %s, attempting to restart...\n", containerName)
+			}
+
+			restartOutput, restartErr := dockerClient.Run("start", existingID)
+			if restartErr == nil {
+				// Successfully restarted - use the existing container
+				if config.Verbose {
+					fmt.Fprintf(os.Stderr, "Successfully restarted container %s\n", containerName)
+				}
+				containerID := existingID
+
+				// Run postStart command if defined (postStart runs every time container is accessed)
+				if devConfig.PostStartCommand != nil {
+					// Load metadata for lifecycle tracking
+					metadata, err := LoadMetadata(containerID)
+					if err != nil {
+						if config.Verbose {
+							fmt.Fprintf(os.Stderr, "Warning: failed to load metadata: %v\n", err)
+						}
+						metadata = nil
+					}
+
+					executor := NewLifecycleExecutor(dockerClient, containerID, devConfig.RemoteUser, config.Verbose, metadata)
+
+					if config.Verbose {
+						fmt.Fprintf(os.Stderr, "Running postStartCommand...\n")
+					}
+					if err := executor.Execute("postStart", devConfig.PostStartCommand); err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: postStartCommand failed: %v\n", err)
+					}
+
+					// Save metadata after lifecycle execution
+					if metadata != nil {
+						if err := SaveMetadata(metadata); err != nil {
+							if config.Verbose {
+								fmt.Fprintf(os.Stderr, "Warning: failed to save metadata: %v\n", err)
+							}
+						}
+					}
+				}
+
+				// Exec into restarted container with user's command
+				cmdPath, err := exec.LookPath(dockerClient.Command())
+				if err != nil {
+					return fmt.Errorf("failed to find docker command: %w", err)
+				}
+
+				execArgs := []string{filepath.Base(cmdPath), "exec"}
+				execArgs = append(execArgs, getTTYFlags()...)
+
+				// Add user flag to exec if remoteUser is specified
+				if devConfig.RemoteUser != "" {
+					execArgs = append(execArgs, "--user", devConfig.RemoteUser)
+				}
+
+				// Calculate working directory - respect workspaceFolder from devcontainer.json
+				restartWorkingDir := mountPath
+				if devConfig.WorkspaceFolder != "" {
+					restartWorkingDir = devConfig.WorkspaceFolder
+				}
+
+				execArgs = append(execArgs, "-w", restartWorkingDir, containerID)
+				execArgs = append(execArgs, config.Command...)
+
+				// Use syscall.Exec to replace current process
+				return syscall.Exec(cmdPath, execArgs, os.Environ())
+			}
+
+			// Restart failed - log and fall through to recreation
+			if config.Verbose {
+				fmt.Fprintf(os.Stderr, "Failed to restart container: %v\nWill remove and recreate: %s\n", restartErr, restartOutput)
+			}
+		}
+	}
+
+	// Either no container exists, or restart failed - remove any stopped container
 	// Try to remove - ignore errors if container doesn't exist
 	_, _ = dockerClient.Run("rm", containerName)
 

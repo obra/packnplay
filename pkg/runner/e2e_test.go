@@ -3046,3 +3046,92 @@ func TestE2E_InitializeCommand_Object(t *testing.T) {
 	require.NoError(t, err, "Container should be able to read task3.txt")
 	assert.Contains(t, containerOutput3, "task3", "Container should see task3 file")
 }
+
+// ============================================================================
+// Section 2.14: Container Restart Behavior Tests
+// ============================================================================
+
+// TestE2E_ContainerRestart tests that packnplay restarts stopped containers
+// instead of recreating them, preserving container state
+func TestE2E_ContainerRestart(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+  "image": "alpine:latest",
+  "onCreateCommand": "echo 'container created' > /tmp/created.txt"
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+
+	// First run - creates container and runs onCreate
+	t.Log("First run: creating container...")
+	output1, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "sh", "-c", "echo 'first run' > /tmp/state.txt && cat /tmp/state.txt")
+	require.NoError(t, err, "First run failed: %s", output1)
+	require.Contains(t, output1, "first run", "Should see first run output")
+
+	// Get container ID - this is the ORIGINAL container ID
+	containerID1 := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID1, "Container should exist after first run")
+	defer cleanupMetadata(t, containerID1)
+
+	// Verify onCreate ran
+	verifyOutput, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "cat", "/tmp/created.txt")
+	require.NoError(t, err, "onCreate marker should exist")
+	require.Contains(t, verifyOutput, "container created", "onCreate should have run")
+
+	// Stop the container (simulate container being stopped)
+	t.Log("Stopping container...")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	stopCmd := exec.CommandContext(ctx, "docker", "stop", containerName)
+	stopOutput, err := stopCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to stop container: %s", string(stopOutput))
+
+	// Verify container is stopped
+	inspectCmd := exec.CommandContext(ctx, "docker", "inspect", "--format", "{{.State.Running}}", containerName)
+	inspectOutput, err := inspectCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to inspect container: %s", string(inspectOutput))
+	require.Equal(t, "false", strings.TrimSpace(string(inspectOutput)), "Container should be stopped")
+
+	// Second run - should RESTART the stopped container, not recreate it
+	t.Log("Second run: should restart stopped container...")
+	output2, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--verbose", "cat", "/tmp/state.txt")
+	require.NoError(t, err, "Second run failed: %s", output2)
+
+	// CRITICAL: Verify the state file from first run still exists
+	// This proves the container was RESTARTED, not RECREATED
+	require.Contains(t, output2, "first run", "State from first run should be preserved (container was restarted, not recreated)")
+
+	// CRITICAL: Verify container ID is THE SAME
+	// This is the definitive proof that the container was restarted, not recreated
+	containerID2 := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID2, "Container should exist after second run")
+	require.Equal(t, containerID1, containerID2, "Container ID should be THE SAME (container was restarted, not recreated)")
+
+	// Verify container is running again
+	inspectCmd2 := exec.CommandContext(ctx, "docker", "inspect", "--format", "{{.State.Running}}", containerName)
+	inspectOutput2, err := inspectCmd2.CombinedOutput()
+	require.NoError(t, err, "Failed to inspect container: %s", string(inspectOutput2))
+	require.Equal(t, "true", strings.TrimSpace(string(inspectOutput2)), "Container should be running after restart")
+
+	// Verify onCreate did NOT run again (it only runs once on creation)
+	metadata := readMetadata(t, containerID1)
+	require.NotNil(t, metadata, "Metadata should exist")
+
+	lifecycleRan, ok := metadata["lifecycleRan"].(map[string]interface{})
+	require.True(t, ok, "Should have lifecycleRan")
+
+	onCreate, ok := lifecycleRan["onCreate"].(map[string]interface{})
+	require.True(t, ok, "Should have onCreate")
+	require.True(t, onCreate["executed"].(bool), "onCreate should be marked executed")
+
+	t.Log("Container restart test completed successfully!")
+	t.Logf("Original container ID: %s", containerID1)
+	t.Logf("Restarted container ID: %s", containerID2)
+	t.Logf("IDs match: %v", containerID1 == containerID2)
+}
