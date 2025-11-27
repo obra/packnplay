@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // OptionSpec represents a feature option specification
@@ -256,8 +257,11 @@ func (r *FeatureResolver) downloadHTTPSFeature(url string) (string, error) {
 		return "", fmt.Errorf("failed to create feature cache directory: %w", err)
 	}
 
-	// Download tarball
-	resp, err := http.Get(url)
+	// Download tarball with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+	resp, err := client.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to download feature from %s: %w", url, err)
 	}
@@ -265,6 +269,26 @@ func (r *FeatureResolver) downloadHTTPSFeature(url string) (string, error) {
 
 	if resp.StatusCode != 200 {
 		return "", fmt.Errorf("failed to download feature: HTTP %d", resp.StatusCode)
+	}
+
+	// Validate Content-Type to ensure it's a tarball
+	contentType := resp.Header.Get("Content-Type")
+	validContentTypes := []string{
+		"application/x-gzip",
+		"application/gzip",
+		"application/x-tar",
+		"application/x-compressed-tar",
+		"application/octet-stream", // Many servers use this generic type
+	}
+	isValidType := false
+	for _, validType := range validContentTypes {
+		if strings.Contains(contentType, validType) {
+			isValidType = true
+			break
+		}
+	}
+	if !isValidType && contentType != "" {
+		return "", fmt.Errorf("invalid content type for feature tarball: %s (expected gzip/tar archive)", contentType)
 	}
 
 	// Create temporary file for tarball
@@ -275,15 +299,23 @@ func (r *FeatureResolver) downloadHTTPSFeature(url string) (string, error) {
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 
-	// Write response to temp file
-	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+	// Write response to temp file with size limit
+	const maxFeatureSize = 100 * 1024 * 1024 // 100MB
+	limitedReader := io.LimitReader(resp.Body, maxFeatureSize)
+	n, err := io.Copy(tmpFile, limitedReader)
+	if err != nil {
 		return "", fmt.Errorf("failed to write tarball: %w", err)
+	}
+	if n == maxFeatureSize {
+		return "", fmt.Errorf("feature tarball exceeds maximum size of 100MB")
 	}
 
 	// Close file before extraction
 	tmpFile.Close()
 
 	// Extract tarball to cache directory
+	// Note: tar automatically strips leading / and prevents absolute paths by default
+	// unless -P flag is used. We intentionally omit -P for security.
 	cmd := exec.Command("tar", "-xf", tmpFile.Name(), "-C", featureCacheDir)
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("failed to extract tarball: %w", err)

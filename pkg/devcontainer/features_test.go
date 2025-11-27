@@ -1,7 +1,11 @@
 package devcontainer
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -553,15 +557,96 @@ func TestValidateFeatureOptions(t *testing.T) {
 }
 
 func TestResolveHTTPSFeature(t *testing.T) {
-	// Start HTTP server (using existing server from previous test setup)
-	// This test assumes the server is running on localhost:8089
-	// and serving /tmp/feature.tgz
+	// Create a test feature tarball in memory
+	tmpFeatureDir := t.TempDir()
+	featureDir := filepath.Join(tmpFeatureDir, "test-https-feature")
+	if err := os.MkdirAll(featureDir, 0755); err != nil {
+		t.Fatalf("Failed to create feature directory: %v", err)
+	}
 
+	// Create metadata
+	metadata := map[string]interface{}{
+		"id":      "https-test-feature",
+		"version": "1.0.0",
+		"name":    "HTTPS Test Feature",
+	}
+	metadataJSON, _ := json.Marshal(metadata)
+	if err := os.WriteFile(filepath.Join(featureDir, "devcontainer-feature.json"), metadataJSON, 0644); err != nil {
+		t.Fatalf("Failed to write metadata: %v", err)
+	}
+
+	// Create install.sh
+	installScript := "#!/bin/bash\necho 'Installing HTTPS test feature'\n"
+	if err := os.WriteFile(filepath.Join(featureDir, "install.sh"), []byte(installScript), 0755); err != nil {
+		t.Fatalf("Failed to write install.sh: %v", err)
+	}
+
+	// Create tarball in memory
+	tarballPath := filepath.Join(tmpFeatureDir, "feature.tgz")
+	tarballFile, err := os.Create(tarballPath)
+	if err != nil {
+		t.Fatalf("Failed to create tarball file: %v", err)
+	}
+	defer tarballFile.Close()
+
+	gzipWriter := gzip.NewWriter(tarballFile)
+	tarWriter := tar.NewWriter(gzipWriter)
+
+	// Add files to tarball
+	files := []string{"devcontainer-feature.json", "install.sh"}
+	for _, filename := range files {
+		filePath := filepath.Join(featureDir, filename)
+		fileInfo, err := os.Stat(filePath)
+		if err != nil {
+			t.Fatalf("Failed to stat file %s: %v", filename, err)
+		}
+
+		header := &tar.Header{
+			Name: filename,
+			Mode: int64(fileInfo.Mode()),
+			Size: fileInfo.Size(),
+		}
+		if err := tarWriter.WriteHeader(header); err != nil {
+			t.Fatalf("Failed to write tar header: %v", err)
+		}
+
+		fileData, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Fatalf("Failed to read file %s: %v", filename, err)
+		}
+		if _, err := tarWriter.Write(fileData); err != nil {
+			t.Fatalf("Failed to write file to tar: %v", err)
+		}
+	}
+
+	if err := tarWriter.Close(); err != nil {
+		t.Fatalf("Failed to close tar writer: %v", err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatalf("Failed to close gzip writer: %v", err)
+	}
+	tarballFile.Close()
+
+	// Read tarball into memory for serving
+	tarballData, err := os.ReadFile(tarballPath)
+	if err != nil {
+		t.Fatalf("Failed to read tarball: %v", err)
+	}
+
+	// Create HTTP test server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/gzip")
+		w.WriteHeader(http.StatusOK)
+		w.Write(tarballData)
+	}))
+	defer server.Close()
+
+	// Test resolution with httptest server
 	tmpDir := t.TempDir()
 	resolver := NewFeatureResolver(tmpDir)
 
 	// Resolve the HTTPS feature
-	resolved, err := resolver.ResolveFeature("http://localhost:8089/feature.tgz", nil)
+	resolved, err := resolver.ResolveFeature(server.URL+"/feature.tgz", nil)
 	if err != nil {
 		t.Fatalf("Failed to resolve HTTPS feature: %v", err)
 	}
