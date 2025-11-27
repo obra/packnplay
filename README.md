@@ -270,7 +270,7 @@ Pack 'n Play creates git worktrees in XDG-compliant locations for isolation:
 
 ### Dev Container Support
 
-packnplay achieves **98% Microsoft devcontainer specification compliance**—production-ready support for reproducible development environments.
+packnplay achieves **100% Microsoft devcontainer specification compliance**—complete, production-ready support for reproducible development environments. 🎉
 
 **Quick Example:**
 ```json
@@ -353,7 +353,6 @@ packnplay achieves **98% Microsoft devcontainer specification compliance**—pro
 - ❌ HTTPS tarball features (`https://example.com/feature.tgz`)
 - ❌ Private feature authentication
 - ❌ Lockfile support
-- ❌ `portsAttributes` configuration
 
 **See [GitHub Issues](https://github.com/obra/packnplay/issues?q=is%3Aissue+is%3Aopen+label%3Adevcontainer) for roadmap.**
 

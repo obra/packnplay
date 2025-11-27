@@ -23,7 +23,7 @@ type LockFile struct {
 type PortAttributes struct {
 	Label         string `json:"label,omitempty"`         // User-visible label for the port
 	Protocol      string `json:"protocol,omitempty"`      // http or https
-	OnAutoForward string `json:"onAutoForward,omitempty"` // notify, openBrowser, openPreview, silent, ignore
+	OnAutoForward string `json:"onAutoForward,omitempty"` // notify, openBrowser, openBrowserOnce, openPreview, silent, ignore
 }
 
 // Config represents a parsed devcontainer.json
