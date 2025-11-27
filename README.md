@@ -102,7 +102,7 @@ packnplay run --no-worktree <command>
 # Pass arguments to the command
 packnplay run bash -c "echo hello && ls"
 
-# Attach to running container
+# Attach to running container (runs postAttachCommand)
 packnplay attach --worktree=<name>
 
 # Stop specific container
@@ -332,7 +332,7 @@ packnplay achieves **97% Microsoft devcontainer specification compliance**—pro
 - `updateContentCommand` - Content change hooks
 - `postCreateCommand` - Runs once after creation
 - `postStartCommand` - Runs every container start
-- `postAttachCommand` - Runs when tools attach
+- `postAttachCommand` - Runs on `packnplay attach`
 - **Formats**: String (shell), array (exec), object (parallel)
 - **Execution order**: Feature commands precede user commands
 
