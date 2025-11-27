@@ -270,7 +270,7 @@ Pack 'n Play creates git worktrees in XDG-compliant locations for isolation:
 
 ### Dev Container Support
 
-packnplay achieves **97% Microsoft devcontainer specification compliance**—production-ready support for reproducible development environments.
+packnplay achieves **98% Microsoft devcontainer specification compliance**—production-ready support for reproducible development environments.
 
 **Quick Example:**
 ```json
@@ -320,8 +320,9 @@ packnplay achieves **97% Microsoft devcontainer specification compliance**—pro
 
 **✅ Environment Variables:**
 - `containerEnv` - Runtime variables with full substitution
+- `remoteEnv` - Variables that can reference containerEnv values
 - **Built-in**: `_REMOTE_USER`, `_REMOTE_USER_HOME`, `_CONTAINER_USER`
-- **Patterns**: `${localEnv:VAR}`, `${containerWorkspaceFolder}`, `${devcontainerId}`
+- **Patterns**: `${localEnv:VAR}`, `${containerEnv:VAR}`, `${containerWorkspaceFolder}`, `${devcontainerId}`
 
 **✅ Port Forwarding:**
 - `forwardPorts` - Secure localhost binding (matches Microsoft behavior)
@@ -343,10 +344,9 @@ packnplay achieves **97% Microsoft devcontainer specification compliance**—pro
 - **Signal Handling**: Graceful shutdown with SIGTERM
 - **Feature Integration**: Complete metadata processing
 
-#### **🚧 Minor Gaps (2% of specification)**
+#### **🚧 Minor Gaps (1% of specification)**
 
 **Would complete specification:**
-- ❌ `remoteEnv` - Container-computed environment variables
 - ❌ Container restart (recreates stopped containers instead)
 
 **Advanced features:**
