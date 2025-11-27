@@ -70,6 +70,8 @@ func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, fea
 	}
 
 	var entrypointArgs []string
+	var entrypointSet bool
+	var entrypointSource string
 
 	for _, feature := range features {
 		if feature.Metadata == nil {
@@ -99,11 +101,17 @@ func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, fea
 
 		// Apply entrypoint
 		if len(metadata.Entrypoint) > 0 {
+			if entrypointSet {
+				fmt.Fprintf(os.Stderr, "Warning: feature '%s' overrides entrypoint from '%s'\n",
+					feature.ID, entrypointSource)
+			}
 			enhancedArgs = append(enhancedArgs, "--entrypoint="+metadata.Entrypoint[0])
 			// Store remaining entrypoint elements to be prepended to command
 			if len(metadata.Entrypoint) > 1 {
 				entrypointArgs = metadata.Entrypoint[1:]
 			}
+			entrypointSet = true
+			entrypointSource = feature.ID
 		}
 
 		// NOTE: ContainerEnv from features is set in the Dockerfile as ENV statements
