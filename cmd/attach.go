@@ -77,9 +77,15 @@ var attachCmd = &cobra.Command{
 		// Run postAttachCommand if configured
 		devConfig, err := devcontainer.LoadConfig(workDir)
 		if err == nil && devConfig != nil && devConfig.PostAttachCommand != nil {
-			// Execute postAttachCommand in container
-			if cmdStr, ok := devConfig.PostAttachCommand.AsString(); ok && cmdStr != "" {
-				fmt.Fprintf(os.Stderr, "Running postAttachCommand...\n")
+			fmt.Fprintf(os.Stderr, "Running postAttachCommand...\n")
+
+			// Get all commands (handles string, array, and object formats)
+			commands := devConfig.PostAttachCommand.ToStringSlice()
+
+			for _, cmdStr := range commands {
+				if cmdStr == "" {
+					continue
+				}
 				_, err := dockerClient.Run("exec", containerName, "/bin/sh", "-c", cmdStr)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Warning: postAttachCommand failed: %v\n", err)
