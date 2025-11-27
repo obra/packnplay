@@ -169,6 +169,18 @@ func isOCIReference(ref string) bool {
 }
 
 // pullOCIFeature pulls an OCI feature to the cache directory
+//
+// Authentication: This function automatically inherits Docker credentials from ~/.docker/config.json.
+// Users can authenticate to private registries using standard Docker login:
+//   docker login ghcr.io
+//   docker login myregistry.com
+//
+// ORAS (the tool used to pull OCI artifacts) automatically reads credentials from the same
+// location as Docker, enabling seamless access to private features without additional configuration.
+// See: https://oras.land/docs/how_to_guides/authentication/
+//
+// For credential helpers (Docker Desktop, cloud provider helpers), ORAS also inherits those
+// automatically, as they're configured in the same Docker config file.
 func (r *FeatureResolver) pullOCIFeature(ociRef string) (string, error) {
 	// Create cache directory if it doesn't exist
 	if err := os.MkdirAll(r.cacheDir, 0755); err != nil {

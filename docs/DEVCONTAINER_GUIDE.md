@@ -412,6 +412,48 @@ Browse available features:
 - Official features: https://github.com/devcontainers/features
 - Community registry: https://containers.dev/features
 
+#### Private Features
+
+Packnplay supports private features from authenticated OCI registries. Authentication uses standard Docker credentials, requiring no additional configuration.
+
+**Setup:**
+```bash
+# Authenticate to your private registry
+docker login ghcr.io
+# or
+docker login myregistry.com
+```
+
+**Usage:**
+```json
+{
+  "features": {
+    "ghcr.io/myorg/private-feature:1": {
+      "option": "value"
+    }
+  }
+}
+```
+
+**How It Works:**
+- Packnplay uses ORAS to pull OCI features
+- ORAS automatically inherits Docker credentials from `~/.docker/config.json`
+- Credential helpers (Docker Desktop, cloud provider helpers) are automatically supported
+- No additional configuration or environment variables needed
+
+**Supported Registries:**
+- GitHub Container Registry (ghcr.io)
+- Docker Hub
+- Azure Container Registry
+- Google Container Registry
+- AWS ECR (with credential helper)
+- Any OCI-compliant registry
+
+If you encounter authentication issues, ensure you've logged in to the registry:
+```bash
+docker login <registry-url>
+```
+
 #### Feature Options Processing
 
 Packnplay fully supports the devcontainer features specification for option processing. Feature options are automatically converted to environment variables that the feature's install script can use.

@@ -669,3 +669,80 @@ func TestResolveHTTPSFeature(t *testing.T) {
 		t.Errorf("Expected version '1.0.0', got '%s'", resolved.Version)
 	}
 }
+
+// TestPrivateRegistryAuthenticationInheritsDockerCredentials verifies that oras inherits
+// Docker credentials from ~/.docker/config.json when pulling private OCI features.
+//
+// This test documents that private registry authentication works automatically via Docker login:
+// 1. User runs: docker login ghcr.io (or other registry)
+// 2. Credentials are stored in ~/.docker/config.json
+// 3. oras pull automatically reads and uses these credentials
+// 4. No additional configuration needed in packnplay
+//
+// According to ORAS documentation (https://oras.land/docs/how_to_guides/authentication/):
+// "ORAS stores credentials in ~/.docker/config.json which is the same file used as the
+// docker client. If you have previously used docker login, the credentials will get reused."
+//
+// This test skips execution by default since it requires:
+// - A private OCI registry with a test feature
+// - Valid credentials configured via docker login
+// However, it serves as documentation and can be run manually for verification.
+func TestPrivateRegistryAuthenticationInheritsDockerCredentials(t *testing.T) {
+	// Skip by default - requires manual setup of private registry and credentials
+	t.Skip("Requires private registry setup and docker login credentials - run manually to verify")
+
+	skipIfNoDocker(t)
+
+	// Create temp cache directory
+	tmpDir := t.TempDir()
+	cacheDir := filepath.Join(tmpDir, "cache")
+
+	// Create resolver
+	resolver := NewFeatureResolver(cacheDir)
+
+	// NOTE: To test manually, replace this with your private feature reference
+	// Example: "ghcr.io/your-org/private-feature:1"
+	// Before running:
+	// 1. docker login ghcr.io
+	// 2. Enter your credentials
+	// 3. Update the ociRef below to your private feature
+	privateOCIRef := "ghcr.io/example-org/private-feature:1"
+
+	// Attempt to resolve the private feature
+	// This should succeed if:
+	// 1. The user has run 'docker login' for the registry
+	// 2. Credentials are stored in ~/.docker/config.json
+	// 3. oras inherits these credentials (which it does by design)
+	resolved, err := resolver.ResolveFeature(privateOCIRef, nil)
+	if err != nil {
+		// Check if error is due to authentication failure
+		if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), "unauthorized") {
+			t.Fatalf("Authentication failed - ensure you've run 'docker login' for the registry: %v", err)
+		}
+		t.Fatalf("Failed to resolve private OCI feature: %v", err)
+	}
+
+	// Verify the resolved feature has expected properties
+	if resolved == nil {
+		t.Fatal("Expected resolved feature, got nil")
+	}
+
+	// Verify ID is set from metadata
+	if resolved.ID == "" {
+		t.Error("Expected ID to be set from feature metadata")
+	}
+
+	// Verify the cached feature has required files
+	installScriptPath := filepath.Join(resolved.InstallPath, "install.sh")
+	if _, err := os.Stat(installScriptPath); os.IsNotExist(err) {
+		t.Errorf("Expected install.sh to exist at %s", installScriptPath)
+	}
+
+	metadataPath := filepath.Join(resolved.InstallPath, "devcontainer-feature.json")
+	if _, err := os.Stat(metadataPath); os.IsNotExist(err) {
+		t.Errorf("Expected devcontainer-feature.json to exist at %s", metadataPath)
+	}
+
+	t.Logf("Successfully resolved private feature %s (version %s) using Docker credentials",
+		resolved.ID, resolved.Version)
+}
