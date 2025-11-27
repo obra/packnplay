@@ -793,7 +793,7 @@ func Run(config *RunConfig) error {
 		// Create substitution context for variable resolution
 		ctx := &devcontainer.SubstituteContext{
 			LocalWorkspaceFolder:     mountPath,
-			ContainerWorkspaceFolder: mountPath,
+			ContainerWorkspaceFolder: workingDir,
 			LocalEnv:                 getLocalEnvMap(),
 			ContainerEnv:             make(map[string]string),
 			Labels:                   labels,
@@ -851,7 +851,7 @@ func Run(config *RunConfig) error {
 		// Create substitution context for variable resolution
 		ctx := &devcontainer.SubstituteContext{
 			LocalWorkspaceFolder:     mountPath,
-			ContainerWorkspaceFolder: mountPath,
+			ContainerWorkspaceFolder: workingDir,
 			LocalEnv:                 getLocalEnvMap(),
 			ContainerEnv:             make(map[string]string),
 			Labels:                   labels,
@@ -874,7 +874,7 @@ func Run(config *RunConfig) error {
 		// Create substitution context for variable resolution
 		ctx := &devcontainer.SubstituteContext{
 			LocalWorkspaceFolder:     mountPath,
-			ContainerWorkspaceFolder: mountPath,
+			ContainerWorkspaceFolder: workingDir,
 			LocalEnv:                 getLocalEnvMap(),
 			ContainerEnv:             make(map[string]string),
 			Labels:                   labels,
@@ -930,7 +930,7 @@ func Run(config *RunConfig) error {
 			// Create substitution context for feature mount variable resolution
 			ctx := &devcontainer.SubstituteContext{
 				LocalWorkspaceFolder:     mountPath,
-				ContainerWorkspaceFolder: mountPath,
+				ContainerWorkspaceFolder: workingDir,
 				LocalEnv:                 getLocalEnvMap(),
 				ContainerEnv:             make(map[string]string),
 				Labels:                   labels,

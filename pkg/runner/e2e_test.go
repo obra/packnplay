@@ -932,6 +932,66 @@ func TestE2E_RemoteEnv(t *testing.T) {
 	require.Contains(t, output, "https://api.example.com/v1")
 }
 
+// TestE2E_RemoteEnvAllVariableTypes tests all variable substitution types in remoteEnv
+// This test verifies Task 2 requirements: ${containerEnv:VAR}, ${localEnv:VAR},
+// ${containerWorkspaceFolder}, and ${localWorkspaceFolder}
+func TestE2E_RemoteEnvAllVariableTypes(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Set a local environment variable for testing ${localEnv:VAR}
+	os.Setenv("TEST_LOCAL_VAR", "from_host")
+	defer os.Unsetenv("TEST_LOCAL_VAR")
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+  "image": "alpine:latest",
+  "workspaceFolder": "/workspace",
+  "containerEnv": {
+    "BASE_PATH": "/usr/local"
+  },
+  "remoteEnv": {
+    "PATH_WITH_BASE": "${containerEnv:BASE_PATH}/bin:/bin",
+    "LOCAL_VALUE": "${localEnv:TEST_LOCAL_VAR}",
+    "CONTAINER_WORKSPACE": "${containerWorkspaceFolder}",
+    "LOCAL_WORKSPACE_BASE": "${localWorkspaceFolderBasename}"
+  }
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Test 1: Verify ${containerEnv:VAR} substitution
+	output1, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "sh", "-c", "echo $PATH_WITH_BASE")
+	require.NoError(t, err, "Failed to test containerEnv substitution: %s", output1)
+	require.Contains(t, output1, "/usr/local/bin:/bin", "containerEnv substitution failed")
+
+	// Test 2: Verify ${localEnv:VAR} substitution
+	output2, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "sh", "-c", "echo $LOCAL_VALUE")
+	require.NoError(t, err, "Failed to test localEnv substitution: %s", output2)
+	require.Contains(t, output2, "from_host", "localEnv substitution failed")
+
+	// Test 3: Verify ${containerWorkspaceFolder} substitution
+	output3, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "sh", "-c", "echo $CONTAINER_WORKSPACE")
+	require.NoError(t, err, "Failed to test containerWorkspaceFolder substitution: %s", output3)
+	require.Contains(t, output3, "/workspace", "containerWorkspaceFolder substitution failed")
+
+	// Test 4: Verify ${localWorkspaceFolderBasename} substitution
+	output4, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--reconnect", "sh", "-c", "echo $LOCAL_WORKSPACE_BASE")
+	require.NoError(t, err, "Failed to test localWorkspaceFolderBasename substitution: %s", output4)
+	projectBasename := filepath.Base(projectDir)
+	require.Contains(t, output4, projectBasename, "localWorkspaceFolderBasename substitution failed")
+
+	t.Log("All variable substitution types verified successfully")
+}
+
 // TestE2E_EnvPriority tests CLI --env overrides devcontainer
 func TestE2E_EnvPriority(t *testing.T) {
 	skipIfNoDocker(t)
