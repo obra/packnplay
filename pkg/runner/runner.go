@@ -293,6 +293,69 @@ func Run(config *RunConfig) error {
 		labels = container.GenerateLabels(projectName, worktreeName)
 	}
 
+	// Step 6.5: Execute initializeCommand on HOST if present
+	// This runs BEFORE container creation, on the host machine
+	// Security note: this executes arbitrary commands from devcontainer.json
+	if devConfig.InitializeCommand != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  Running initializeCommand on host (executes code from devcontainer.json)...\n")
+
+		// Handle different command formats (string, array, object)
+		var err error
+		if devConfig.InitializeCommand.IsString() {
+			// String command: execute with shell
+			cmdStr, _ := devConfig.InitializeCommand.AsString()
+			if config.Verbose {
+				fmt.Fprintf(os.Stderr, "Executing: %s\n", cmdStr)
+			}
+			cmd := exec.Command("/bin/sh", "-c", cmdStr)
+			cmd.Dir = mountPath
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err = cmd.Run()
+		} else if devConfig.InitializeCommand.IsArray() {
+			// Array command: execute directly without shell
+			cmdArray, _ := devConfig.InitializeCommand.AsArray()
+			if len(cmdArray) > 0 {
+				if config.Verbose {
+					fmt.Fprintf(os.Stderr, "Executing: %v\n", cmdArray)
+				}
+				cmd := exec.Command(cmdArray[0], cmdArray[1:]...)
+				cmd.Dir = mountPath
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				err = cmd.Run()
+			}
+		} else if devConfig.InitializeCommand.IsObject() {
+			// Object command: execute all commands (parallel tasks)
+			obj, _ := devConfig.InitializeCommand.AsObject()
+			commands := devConfig.InitializeCommand.ToStringSlice()
+			for _, cmdStr := range commands {
+				if cmdStr == "" {
+					continue
+				}
+				if config.Verbose {
+					fmt.Fprintf(os.Stderr, "Executing: %s\n", cmdStr)
+				}
+				cmd := exec.Command("/bin/sh", "-c", cmdStr)
+				cmd.Dir = mountPath
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				if err = cmd.Run(); err != nil {
+					break
+				}
+			}
+			_ = obj // Suppress unused warning
+		}
+
+		if err != nil {
+			return fmt.Errorf("initializeCommand failed: %w", err)
+		}
+
+		if config.Verbose {
+			fmt.Fprintf(os.Stderr, "initializeCommand completed successfully\n")
+		}
+	}
+
 	// Step 7: Check if container already running
 	if isRunning, err := containerIsRunning(dockerClient, containerName); err != nil {
 		return fmt.Errorf("failed to check container status: %w", err)

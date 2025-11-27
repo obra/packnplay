@@ -2830,3 +2830,105 @@ func TestE2E_PostAttachCommand_AsNonRootUser(t *testing.T) {
 	require.NoError(t, err, "Failed to verify postAttachCommand result: %s", string(verifyOutput))
 	require.Contains(t, string(verifyOutput), "node", "postAttachCommand should have run as 'node' user")
 }
+
+// TestE2E_InitializeCommand tests that initializeCommand runs on the HOST before container creation
+func TestE2E_InitializeCommand(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create a test project with initializeCommand that creates a file on the host
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"initializeCommand": "echo 'initialized on host' > init-marker.txt"
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+
+	// Run packnplay
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "test")
+	require.NoError(t, err, "packnplay failed: %s", output)
+
+	// Verify security warning was displayed
+	assert.Contains(t, output, "initializeCommand", "Should display security warning about initializeCommand")
+
+	// Verify the file was created on the HOST
+	markerFile := filepath.Join(projectDir, "init-marker.txt")
+	content, err := os.ReadFile(markerFile)
+	require.NoError(t, err, "initializeCommand should have created init-marker.txt on host")
+	assert.Contains(t, string(content), "initialized on host", "File content should match initializeCommand output")
+
+	// Verify the container can see the file
+	// The file should be in the working directory, so use a relative path
+	containerOutput, err := execInContainer(t, containerName, []string{"cat", "init-marker.txt"})
+	if err != nil {
+		t.Logf("Container output: %s", containerOutput)
+		t.Logf("Error: %v", err)
+		// Try to see what files exist in the working directory
+		pwdOutput, _ := execInContainer(t, containerName, []string{"pwd"})
+		t.Logf("Container pwd: %s", pwdOutput)
+		lsOutput, _ := execInContainer(t, containerName, []string{"ls", "-la"})
+		t.Logf("Container directory listing:\n%s", lsOutput)
+	}
+	require.NoError(t, err, "Container should be able to read the file created by initializeCommand: %s", containerOutput)
+	assert.Contains(t, containerOutput, "initialized on host", "Container should see file created by initializeCommand")
+}
+
+// TestE2E_InitializeCommand_Array tests initializeCommand with array format
+func TestE2E_InitializeCommand_Array(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create a test project with initializeCommand as an array
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"initializeCommand": ["sh", "-c", "echo 'array format' > array-marker.txt"]
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+
+	// Run packnplay
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "test")
+	require.NoError(t, err, "packnplay failed: %s", output)
+
+	// Verify the file was created on the HOST
+	markerFile := filepath.Join(projectDir, "array-marker.txt")
+	content, err := os.ReadFile(markerFile)
+	require.NoError(t, err, "initializeCommand should have created array-marker.txt on host")
+	assert.Contains(t, string(content), "array format", "File content should match initializeCommand output")
+}
+
+// TestE2E_InitializeCommand_Failure tests that initializeCommand failure prevents container creation
+func TestE2E_InitializeCommand_Failure(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create a test project with initializeCommand that fails
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"initializeCommand": "exit 1"
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+
+	// Run packnplay - should fail
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "test")
+	require.Error(t, err, "packnplay should fail when initializeCommand fails")
+	assert.Contains(t, output, "initializeCommand failed", "Error message should indicate initializeCommand failure")
+
+	// Verify container was NOT created
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	checkCmd := exec.CommandContext(ctx, "docker", "ps", "-aq", "--filter", fmt.Sprintf("name=^%s$", containerName))
+	checkOutput, _ := checkCmd.Output()
+	assert.Empty(t, strings.TrimSpace(string(checkOutput)), "Container should not exist after initializeCommand failure")
+}
