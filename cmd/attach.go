@@ -79,6 +79,12 @@ var attachCmd = &cobra.Command{
 		if err == nil && devConfig != nil && devConfig.PostAttachCommand != nil {
 			fmt.Fprintf(os.Stderr, "Running postAttachCommand...\n")
 
+			// Get the remote user from devcontainer config (matching LifecycleExecutor behavior)
+			remoteUser := devConfig.RemoteUser
+			if remoteUser == "" {
+				remoteUser = "root" // fallback to root if not specified
+			}
+
 			// Get all commands (handles string, array, and object formats)
 			commands := devConfig.PostAttachCommand.ToStringSlice()
 
@@ -86,7 +92,7 @@ var attachCmd = &cobra.Command{
 				if cmdStr == "" {
 					continue
 				}
-				_, err := dockerClient.Run("exec", containerName, "/bin/sh", "-c", cmdStr)
+				_, err := dockerClient.Run("exec", "-u", remoteUser, containerName, "/bin/sh", "-c", cmdStr)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Warning: postAttachCommand failed: %v\n", err)
 				}

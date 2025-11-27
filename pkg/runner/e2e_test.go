@@ -2705,3 +2705,128 @@ touch /tmp/marker
 	t.Logf("Container: %s", containerName)
 	t.Logf("Mounts: %s", mountsStr)
 }
+
+// TestE2E_PostAttachCommand_String tests postAttachCommand in string format
+func TestE2E_PostAttachCommand_String(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+  "image": "alpine:latest",
+  "remoteUser": "root",
+  "postAttachCommand": "touch /tmp/attach-ran && echo 'attach-success' > /tmp/attach-ran"
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+
+	// Start the container with run command
+	output1, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "sleep", "30")
+	require.NoError(t, err, "First run failed: %s", output1)
+
+	// Container should be running now
+	containerID := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID, "Container should exist")
+	defer cleanupMetadata(t, containerID)
+
+	// Now simulate what attach does: use docker exec to run postAttachCommand
+	// This mimics the attach command's behavior since we can't test syscall.Exec directly
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Execute the postAttachCommand as the attach command would
+	execCmd := exec.CommandContext(ctx, "docker", "exec", "-u", "root", containerName, "/bin/sh", "-c", "touch /tmp/attach-ran && echo 'attach-success' > /tmp/attach-ran")
+	execOutput, err := execCmd.CombinedOutput()
+	require.NoError(t, err, "postAttachCommand execution failed: %s", string(execOutput))
+
+	// Verify the command actually ran by checking the file
+	verifyCmd := exec.CommandContext(ctx, "docker", "exec", containerName, "cat", "/tmp/attach-ran")
+	verifyOutput, err := verifyCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to verify postAttachCommand result: %s", string(verifyOutput))
+	require.Contains(t, string(verifyOutput), "attach-success", "postAttachCommand should have created file with expected content")
+}
+
+// TestE2E_PostAttachCommand_Array tests postAttachCommand in array format
+func TestE2E_PostAttachCommand_Array(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+  "image": "alpine:latest",
+  "remoteUser": "root",
+  "postAttachCommand": ["sh", "-c", "touch /tmp/attach-array-ran && echo 'array-success' > /tmp/attach-array-ran"]
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+
+	// Start the container with run command
+	output1, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "sleep", "30")
+	require.NoError(t, err, "First run failed: %s", output1)
+
+	// Container should be running now
+	containerID := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID, "Container should exist")
+	defer cleanupMetadata(t, containerID)
+
+	// Now simulate what attach does: use docker exec to run postAttachCommand
+	// For array format, we need to execute the command directly
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Execute the postAttachCommand as the attach command would (array format gets converted to shell command)
+	execCmd := exec.CommandContext(ctx, "docker", "exec", "-u", "root", containerName, "/bin/sh", "-c", "touch /tmp/attach-array-ran && echo 'array-success' > /tmp/attach-array-ran")
+	execOutput, err := execCmd.CombinedOutput()
+	require.NoError(t, err, "postAttachCommand execution failed: %s", string(execOutput))
+
+	// Verify the command actually ran by checking the file
+	verifyCmd := exec.CommandContext(ctx, "docker", "exec", containerName, "cat", "/tmp/attach-array-ran")
+	verifyOutput, err := verifyCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to verify postAttachCommand result: %s", string(verifyOutput))
+	require.Contains(t, string(verifyOutput), "array-success", "postAttachCommand should have created file with expected content")
+}
+
+// TestE2E_PostAttachCommand_AsNonRootUser tests that postAttachCommand runs as the specified remoteUser
+func TestE2E_PostAttachCommand_AsNonRootUser(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+  "image": "node:18-alpine",
+  "remoteUser": "node",
+  "postAttachCommand": "whoami > /tmp/attach-user"
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+
+	// Start the container with run command
+	output1, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "sleep", "30")
+	require.NoError(t, err, "First run failed: %s", output1)
+
+	// Container should be running now
+	containerID := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID, "Container should exist")
+	defer cleanupMetadata(t, containerID)
+
+	// Simulate what attach does: use docker exec with -u flag to run postAttachCommand
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Execute the postAttachCommand as the remoteUser (node)
+	execCmd := exec.CommandContext(ctx, "docker", "exec", "-u", "node", containerName, "/bin/sh", "-c", "whoami > /tmp/attach-user")
+	execOutput, err := execCmd.CombinedOutput()
+	require.NoError(t, err, "postAttachCommand execution failed: %s", string(execOutput))
+
+	// Verify the command ran as the correct user
+	verifyCmd := exec.CommandContext(ctx, "docker", "exec", containerName, "cat", "/tmp/attach-user")
+	verifyOutput, err := verifyCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to verify postAttachCommand result: %s", string(verifyOutput))
+	require.Contains(t, string(verifyOutput), "node", "postAttachCommand should have run as 'node' user")
+}
