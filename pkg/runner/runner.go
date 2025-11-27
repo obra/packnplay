@@ -87,11 +87,15 @@ func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, fea
 		}
 
 		for _, cap := range metadata.CapAdd {
-			enhancedArgs = append(enhancedArgs, "--cap-add="+cap)
+			if cap != "" {
+				enhancedArgs = append(enhancedArgs, "--cap-add="+cap)
+			}
 		}
 
 		for _, secOpt := range metadata.SecurityOpt {
-			enhancedArgs = append(enhancedArgs, "--security-opt="+secOpt)
+			if secOpt != "" {
+				enhancedArgs = append(enhancedArgs, "--security-opt="+secOpt)
+			}
 		}
 
 		// Apply init flag

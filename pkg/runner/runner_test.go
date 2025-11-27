@@ -179,3 +179,59 @@ func TestSingleEntrypoint_NoWarning(t *testing.T) {
 	t.Logf("No warning output (as expected)")
 	t.Logf("Entrypoint arg: %s", entrypointArg)
 }
+
+// TestEmptyStringFiltering_CapAddAndSecurityOpt tests that empty strings are filtered from capAdd and securityOpt
+func TestEmptyStringFiltering_CapAddAndSecurityOpt(t *testing.T) {
+	features := []*devcontainer.ResolvedFeature{
+		{
+			ID: "test-feature",
+			Metadata: &devcontainer.FeatureMetadata{
+				CapAdd:      []string{"", "SYS_ADMIN", "", "NET_ADMIN", ""},
+				SecurityOpt: []string{"", "seccomp=unconfined", ""},
+			},
+		},
+	}
+
+	applier := NewFeaturePropertiesApplier()
+	dockerArgs := []string{"run", "-d", "--name", "test"}
+
+	ctx := &devcontainer.SubstituteContext{
+		LocalWorkspaceFolder:     "/test/workspace",
+		ContainerWorkspaceFolder: "/workspace",
+		LocalEnv:                 map[string]string{},
+		ContainerEnv:             map[string]string{},
+		Labels:                   map[string]string{},
+	}
+
+	enhancedArgs, _, _ := applier.ApplyFeatureProperties(dockerArgs, features, map[string]string{}, ctx)
+
+	// Count cap-add arguments - should only have non-empty values
+	capAddCount := 0
+	for _, arg := range enhancedArgs {
+		if strings.HasPrefix(arg, "--cap-add=") {
+			capAddCount++
+			// Verify no empty values
+			assert.NotEqual(t, "--cap-add=", arg, "Should not have empty cap-add value")
+		}
+	}
+	assert.Equal(t, 2, capAddCount, "Should have exactly 2 cap-add arguments (SYS_ADMIN and NET_ADMIN)")
+
+	// Count security-opt arguments - should only have non-empty values
+	securityOptCount := 0
+	for _, arg := range enhancedArgs {
+		if strings.HasPrefix(arg, "--security-opt=") {
+			securityOptCount++
+			// Verify no empty values
+			assert.NotEqual(t, "--security-opt=", arg, "Should not have empty security-opt value")
+		}
+	}
+	assert.Equal(t, 1, securityOptCount, "Should have exactly 1 security-opt argument (seccomp=unconfined)")
+
+	// Verify the actual values are present
+	argsStr := strings.Join(enhancedArgs, " ")
+	assert.Contains(t, argsStr, "--cap-add=SYS_ADMIN", "Should contain SYS_ADMIN capability")
+	assert.Contains(t, argsStr, "--cap-add=NET_ADMIN", "Should contain NET_ADMIN capability")
+	assert.Contains(t, argsStr, "--security-opt=seccomp=unconfined", "Should contain seccomp security option")
+
+	t.Logf("Enhanced args: %v", enhancedArgs)
+}
