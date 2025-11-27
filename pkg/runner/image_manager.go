@@ -160,8 +160,14 @@ func (im *ImageManager) buildImage(devConfig *devcontainer.Config, projectPath s
 
 // buildWithFeatures builds a container image with devcontainer features
 func (im *ImageManager) buildWithFeatures(devConfig *devcontainer.Config, projectPath string, imageName string) error {
+	// Load lockfile if it exists
+	lockfile, err := devcontainer.LoadLockFile(projectPath)
+	if err != nil {
+		return fmt.Errorf("failed to load lockfile: %w", err)
+	}
+
 	// Resolve features
-	resolver := devcontainer.NewFeatureResolver(filepath.Join(projectPath, ".devcontainer"))
+	resolver := devcontainer.NewFeatureResolver(filepath.Join(projectPath, ".devcontainer"), lockfile)
 	resolvedFeatures := make(map[string]*devcontainer.ResolvedFeature)
 
 	for featurePath, options := range devConfig.Features {

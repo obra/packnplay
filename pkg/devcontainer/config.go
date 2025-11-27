@@ -8,6 +8,17 @@ import (
 	"github.com/obra/packnplay/pkg/userdetect"
 )
 
+// LockedFeature represents a pinned feature version in devcontainer-lock.json
+type LockedFeature struct {
+	Version  string `json:"version"`  // Semantic version of the feature
+	Resolved string `json:"resolved"` // Full OCI ref with digest or version
+}
+
+// LockFile represents devcontainer-lock.json which pins feature versions
+type LockFile struct {
+	Features map[string]LockedFeature `json:"features"`
+}
+
 // Config represents a parsed devcontainer.json
 type Config struct {
 	// Basic container configuration
@@ -129,4 +140,27 @@ func (c *Config) GetResolvedEnvironment(ctx *SubstituteContext) map[string]strin
 	}
 
 	return result
+}
+
+// LoadLockFile loads and parses .devcontainer/devcontainer-lock.json if it exists
+// Returns nil if the lockfile doesn't exist (not an error)
+func LoadLockFile(projectPath string) (*LockFile, error) {
+	lockPath := filepath.Join(projectPath, ".devcontainer", "devcontainer-lock.json")
+
+	// Check if file exists
+	if _, err := os.Stat(lockPath); os.IsNotExist(err) {
+		return nil, nil // No lockfile is not an error
+	}
+
+	data, err := os.ReadFile(lockPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var lockfile LockFile
+	if err := json.Unmarshal(data, &lockfile); err != nil {
+		return nil, err
+	}
+
+	return &lockfile, nil
 }

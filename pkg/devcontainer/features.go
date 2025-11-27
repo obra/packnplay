@@ -153,12 +153,14 @@ type ResolvedFeature struct {
 // FeatureResolver handles resolving features from various sources
 type FeatureResolver struct {
 	cacheDir string
+	lockfile *LockFile // Optional lockfile for version pinning
 }
 
-// NewFeatureResolver creates a new FeatureResolver with the specified cache directory
-func NewFeatureResolver(cacheDir string) *FeatureResolver {
+// NewFeatureResolver creates a new FeatureResolver with the specified cache directory and optional lockfile
+func NewFeatureResolver(cacheDir string, lockfile *LockFile) *FeatureResolver {
 	return &FeatureResolver{
 		cacheDir: cacheDir,
+		lockfile: lockfile,
 	}
 }
 
@@ -338,6 +340,14 @@ func (r *FeatureResolver) downloadHTTPSFeature(url string) (string, error) {
 
 // ResolveFeature resolves a local feature from the given path with the specified options
 func (r *FeatureResolver) ResolveFeature(featurePath string, options map[string]interface{}) (*ResolvedFeature, error) {
+	// Check if lockfile has a pinned version for this feature
+	if r.lockfile != nil {
+		if locked, exists := r.lockfile.Features[featurePath]; exists {
+			// Use the locked/resolved version instead of the original reference
+			featurePath = locked.Resolved
+		}
+	}
+
 	// Check if this is an OCI reference
 	if isOCIReference(featurePath) {
 		cachedPath, err := r.pullOCIFeature(featurePath)

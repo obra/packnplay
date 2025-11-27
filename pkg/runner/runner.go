@@ -972,7 +972,9 @@ func Run(config *RunConfig) error {
 	// Apply feature-contributed container properties (security options, capabilities, etc.)
 	if len(devConfig.Features) > 0 {
 		// Resolve features for properties application
-		resolver := devcontainer.NewFeatureResolver(filepath.Join(os.TempDir(), "packnplay-features-cache"))
+		// Note: We don't load lockfile here as it's not critical for property resolution
+		// The main feature resolution happens during image build where lockfile IS loaded
+		resolver := devcontainer.NewFeatureResolver(filepath.Join(os.TempDir(), "packnplay-features-cache"), nil)
 
 		var resolvedFeatures []*devcontainer.ResolvedFeature
 		for reference, options := range devConfig.Features {
@@ -1120,7 +1122,9 @@ func Run(config *RunConfig) error {
 		var mergedCommands map[string]*devcontainer.LifecycleCommand
 		if hasFeatures {
 			// Resolve features for lifecycle merging
-			resolver := devcontainer.NewFeatureResolver(filepath.Join(os.TempDir(), "packnplay-features-cache"))
+			// Note: We don't load lockfile here as it's not critical for lifecycle resolution
+			// The main feature resolution happens during image build where lockfile IS loaded
+			resolver := devcontainer.NewFeatureResolver(filepath.Join(os.TempDir(), "packnplay-features-cache"), nil)
 
 			var resolvedFeatures []*devcontainer.ResolvedFeature
 			for reference, options := range devConfig.Features {

@@ -68,7 +68,7 @@ func TestResolveLocalFeature(t *testing.T) {
 	}
 
 	// Create resolver and resolve feature
-	resolver := NewFeatureResolver(cacheDir)
+	resolver := NewFeatureResolver(cacheDir, nil)
 	options := map[string]interface{}{
 		"someOption": "someValue",
 	}
@@ -148,7 +148,7 @@ func TestResolveDependencies(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(featureCPath, "install.sh"), []byte("#!/bin/bash\necho 'C'\n"), 0755)
 
 	// Create resolver and resolve features
-	resolver := NewFeatureResolver(cacheDir)
+	resolver := NewFeatureResolver(cacheDir, nil)
 	features := map[string]*ResolvedFeature{
 		"feature-a": {ID: "feature-a", InstallPath: featureAPath},
 		"feature-b": {ID: "feature-b", InstallPath: featureBPath},
@@ -182,7 +182,7 @@ func TestResolveOCIFeature(t *testing.T) {
 	cacheDir := filepath.Join(tmpDir, "cache")
 
 	// Create resolver
-	resolver := NewFeatureResolver(cacheDir)
+	resolver := NewFeatureResolver(cacheDir, nil)
 
 	// Test resolving a real OCI feature from ghcr.io
 	// Using a small, well-known feature: ghcr.io/devcontainers/features/common-utils
@@ -375,7 +375,7 @@ func TestParseCompleteFeatureMetadata(t *testing.T) {
 	}
 
 	// Test resolution
-	resolver := NewFeatureResolver("/tmp/cache")
+	resolver := NewFeatureResolver("/tmp/cache", nil)
 	resolved, err := resolver.ResolveFeature(featureDir, map[string]interface{}{
 		"version": "18.20.0",
 	})
@@ -643,7 +643,7 @@ func TestResolveHTTPSFeature(t *testing.T) {
 
 	// Test resolution with httptest server
 	tmpDir := t.TempDir()
-	resolver := NewFeatureResolver(tmpDir)
+	resolver := NewFeatureResolver(tmpDir, nil)
 
 	// Resolve the HTTPS feature
 	resolved, err := resolver.ResolveFeature(server.URL+"/feature.tgz", nil)
@@ -698,7 +698,7 @@ func TestPrivateRegistryAuthenticationInheritsDockerCredentials(t *testing.T) {
 	cacheDir := filepath.Join(tmpDir, "cache")
 
 	// Create resolver
-	resolver := NewFeatureResolver(cacheDir)
+	resolver := NewFeatureResolver(cacheDir, nil)
 
 	// NOTE: To test manually, replace this with your private feature reference
 	// Example: "ghcr.io/your-org/private-feature:1"
