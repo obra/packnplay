@@ -551,3 +551,36 @@ func TestValidateFeatureOptions(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveHTTPSFeature(t *testing.T) {
+	// Start HTTP server (using existing server from previous test setup)
+	// This test assumes the server is running on localhost:8089
+	// and serving /tmp/feature.tgz
+
+	tmpDir := t.TempDir()
+	resolver := NewFeatureResolver(tmpDir)
+
+	// Resolve the HTTPS feature
+	resolved, err := resolver.ResolveFeature("http://localhost:8089/feature.tgz", nil)
+	if err != nil {
+		t.Fatalf("Failed to resolve HTTPS feature: %v", err)
+	}
+
+	if resolved == nil {
+		t.Fatal("Expected resolved feature, got nil")
+	}
+
+	// Verify the feature was downloaded and extracted
+	if _, err := os.Stat(filepath.Join(resolved.InstallPath, "install.sh")); err != nil {
+		t.Errorf("Expected install.sh to exist: %v", err)
+	}
+
+	// Verify metadata was parsed
+	if resolved.ID != "https-test-feature" {
+		t.Errorf("Expected ID 'https-test-feature', got '%s'", resolved.ID)
+	}
+
+	if resolved.Version != "1.0.0" {
+		t.Errorf("Expected version '1.0.0', got '%s'", resolved.Version)
+	}
+}

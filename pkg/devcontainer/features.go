@@ -1,8 +1,12 @@
 package devcontainer
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -225,11 +229,83 @@ func (r *FeatureResolver) pullOCIFeature(ociRef string) (string, error) {
 	return featureCacheDir, nil
 }
 
+// hashURL generates a cache-safe hash of a URL
+func hashURL(url string) string {
+	hash := sha256.Sum256([]byte(url))
+	return hex.EncodeToString(hash[:])
+}
+
+// downloadHTTPSFeature downloads a feature from an HTTPS/HTTP URL and extracts it to the cache
+func (r *FeatureResolver) downloadHTTPSFeature(url string) (string, error) {
+	// Create cache directory if it doesn't exist
+	if err := os.MkdirAll(r.cacheDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create cache directory: %w", err)
+	}
+
+	// Create cache directory for this specific URL
+	urlHash := hashURL(url)
+	featureCacheDir := filepath.Join(r.cacheDir, "https-cache", urlHash)
+
+	// Check if already cached
+	if _, err := os.Stat(filepath.Join(featureCacheDir, "install.sh")); err == nil {
+		return featureCacheDir, nil
+	}
+
+	// Create cache directory
+	if err := os.MkdirAll(featureCacheDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create feature cache directory: %w", err)
+	}
+
+	// Download tarball
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to download feature from %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("failed to download feature: HTTP %d", resp.StatusCode)
+	}
+
+	// Create temporary file for tarball
+	tmpFile, err := os.CreateTemp("", "feature-*.tgz")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	// Write response to temp file
+	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+		return "", fmt.Errorf("failed to write tarball: %w", err)
+	}
+
+	// Close file before extraction
+	tmpFile.Close()
+
+	// Extract tarball to cache directory
+	cmd := exec.Command("tar", "-xf", tmpFile.Name(), "-C", featureCacheDir)
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to extract tarball: %w", err)
+	}
+
+	return featureCacheDir, nil
+}
+
 // ResolveFeature resolves a local feature from the given path with the specified options
 func (r *FeatureResolver) ResolveFeature(featurePath string, options map[string]interface{}) (*ResolvedFeature, error) {
 	// Check if this is an OCI reference
 	if isOCIReference(featurePath) {
 		cachedPath, err := r.pullOCIFeature(featurePath)
+		if err != nil {
+			return nil, err
+		}
+		featurePath = cachedPath
+	}
+
+	// Check if this is an HTTPS tarball
+	if strings.HasPrefix(featurePath, "https://") || strings.HasPrefix(featurePath, "http://") {
+		cachedPath, err := r.downloadHTTPSFeature(featurePath)
 		if err != nil {
 			return nil, err
 		}

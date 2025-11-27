@@ -171,9 +171,13 @@ func (im *ImageManager) buildWithFeatures(devConfig *devcontainer.Config, projec
 		}
 
 		// Use absolute path if provided, otherwise resolve relative to .devcontainer
-		// Don't modify OCI registry references (they contain registry domains)
+		// Don't modify OCI registry references (they contain registry domains) or HTTP(S) URLs
 		fullPath := featurePath
-		if !filepath.IsAbs(featurePath) && !strings.Contains(featurePath, "ghcr.io/") && !strings.Contains(featurePath, "mcr.microsoft.com/") {
+		if !filepath.IsAbs(featurePath) &&
+			!strings.Contains(featurePath, "ghcr.io/") &&
+			!strings.Contains(featurePath, "mcr.microsoft.com/") &&
+			!strings.HasPrefix(featurePath, "http://") &&
+			!strings.HasPrefix(featurePath, "https://") {
 			fullPath = filepath.Join(projectPath, ".devcontainer", featurePath)
 		}
 
@@ -190,14 +194,14 @@ func (im *ImageManager) buildWithFeatures(devConfig *devcontainer.Config, projec
 		return fmt.Errorf("failed to resolve feature dependencies: %w", err)
 	}
 
-	// Copy OCI features into build context so Docker can access them
+	// Copy remote features (OCI/HTTPS) into build context so Docker can access them
 	buildContextPath := filepath.Join(projectPath, ".devcontainer")
 	ociCacheDir := filepath.Join(buildContextPath, "oci-cache")
 
 	for _, feature := range orderedFeatures {
-		// Check if this is an OCI feature (outside the build context)
+		// Check if this is a remote feature (outside the build context)
 		if !strings.HasPrefix(feature.InstallPath, buildContextPath) {
-			// Copy OCI feature into build context
+			// Copy remote feature into build context
 			destDir := filepath.Join(ociCacheDir, filepath.Base(feature.InstallPath))
 
 			// Remove existing cached copy in build context
@@ -205,8 +209,11 @@ func (im *ImageManager) buildWithFeatures(devConfig *devcontainer.Config, projec
 
 			// Copy feature directory into build context
 			if err := copyDir(feature.InstallPath, destDir); err != nil {
-				return fmt.Errorf("failed to copy OCI feature %s into build context: %w", feature.ID, err)
+				return fmt.Errorf("failed to copy remote feature %s into build context: %w", feature.ID, err)
 			}
+
+			// Update feature's InstallPath to point to the new location in build context
+			feature.InstallPath = destDir
 		}
 	}
 

@@ -3135,3 +3135,83 @@ func TestE2E_ContainerRestart(t *testing.T) {
 	t.Logf("Restarted container ID: %s", containerID2)
 	t.Logf("IDs match: %v", containerID1 == containerID2)
 }
+
+// TestE2E_HTTPSFeature tests downloading features from HTTPS URLs
+func TestE2E_HTTPSFeature(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create a feature tarball to serve over HTTP
+	featureDir, err := os.MkdirTemp("", "feature-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(featureDir)
+
+	// Create feature files
+	installScript := `#!/bin/sh
+set -e
+echo "HTTPS feature installed" > /tmp/https-feature-marker
+`
+	metadataJSON := `{
+	"id": "https-test-feature",
+	"version": "1.0.0",
+	"name": "HTTPS Test Feature"
+}`
+
+	err = os.WriteFile(filepath.Join(featureDir, "install.sh"), []byte(installScript), 0755)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(featureDir, "devcontainer-feature.json"), []byte(metadataJSON), 0644)
+	require.NoError(t, err)
+
+	// Create tarball
+	tarballPath := filepath.Join(featureDir, "feature.tgz")
+	cmd := exec.Command("tar", "-czf", tarballPath, "-C", featureDir, "install.sh", "devcontainer-feature.json")
+	err = cmd.Run()
+	require.NoError(t, err)
+
+	// Start HTTP server to serve the tarball
+	serverDir, err := os.MkdirTemp("", "server-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(serverDir)
+
+	// Copy tarball to server directory
+	tarballData, err := os.ReadFile(tarballPath)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(serverDir, "feature.tgz"), tarballData, 0644)
+	require.NoError(t, err)
+
+	// Start Python HTTP server in background
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	serverCmd := exec.CommandContext(ctx, "python3", "-m", "http.server", "8089", "--directory", serverDir)
+	err = serverCmd.Start()
+	require.NoError(t, err)
+	defer serverCmd.Process.Kill()
+
+	// Wait for server to be ready
+	time.Sleep(2 * time.Second)
+
+	// Create test project that references the HTTPS feature
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"features": {
+				"http://localhost:8089/feature.tgz": {}
+			}
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run packnplay and verify the feature was installed
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "cat", "/tmp/https-feature-marker")
+	require.NoError(t, err, "HTTPS feature should be installed: %s", output)
+	require.Contains(t, output, "HTTPS feature installed", "Feature marker should contain expected content")
+}
