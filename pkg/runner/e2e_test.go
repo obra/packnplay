@@ -2932,3 +2932,57 @@ func TestE2E_InitializeCommand_Failure(t *testing.T) {
 	checkOutput, _ := checkCmd.Output()
 	assert.Empty(t, strings.TrimSpace(string(checkOutput)), "Container should not exist after initializeCommand failure")
 }
+
+// TestE2E_InitializeCommand_Object tests initializeCommand with object format (parallel execution)
+func TestE2E_InitializeCommand_Object(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create a test project with initializeCommand using object format (parallel tasks)
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"initializeCommand": {
+				"task1": "echo task1 > task1.txt",
+				"task2": "echo task2 > task2.txt",
+				"task3": "echo task3 > task3.txt"
+			}
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+
+	// Run packnplay
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "test")
+	require.NoError(t, err, "packnplay failed: %s", output)
+
+	// Verify all three files were created on the HOST (parallel execution)
+	task1File := filepath.Join(projectDir, "task1.txt")
+	content1, err := os.ReadFile(task1File)
+	require.NoError(t, err, "task1 should have created task1.txt on host")
+	assert.Contains(t, string(content1), "task1", "task1 file content should be correct")
+
+	task2File := filepath.Join(projectDir, "task2.txt")
+	content2, err := os.ReadFile(task2File)
+	require.NoError(t, err, "task2 should have created task2.txt on host")
+	assert.Contains(t, string(content2), "task2", "task2 file content should be correct")
+
+	task3File := filepath.Join(projectDir, "task3.txt")
+	content3, err := os.ReadFile(task3File)
+	require.NoError(t, err, "task3 should have created task3.txt on host")
+	assert.Contains(t, string(content3), "task3", "task3 file content should be correct")
+
+	// Verify container can see all files
+	containerOutput1, err := execInContainer(t, containerName, []string{"cat", "task1.txt"})
+	require.NoError(t, err, "Container should be able to read task1.txt")
+	assert.Contains(t, containerOutput1, "task1", "Container should see task1 file")
+
+	containerOutput2, err := execInContainer(t, containerName, []string{"cat", "task2.txt"})
+	require.NoError(t, err, "Container should be able to read task2.txt")
+	assert.Contains(t, containerOutput2, "task2", "Container should see task2 file")
+
+	containerOutput3, err := execInContainer(t, containerName, []string{"cat", "task3.txt"})
+	require.NoError(t, err, "Container should be able to read task3.txt")
+	assert.Contains(t, containerOutput3, "task3", "Container should see task3 file")
+}

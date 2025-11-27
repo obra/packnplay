@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -326,25 +327,9 @@ func Run(config *RunConfig) error {
 				err = cmd.Run()
 			}
 		} else if devConfig.InitializeCommand.IsObject() {
-			// Object command: execute all commands (parallel tasks)
+			// Object command: execute all commands in parallel (matches Microsoft spec)
 			obj, _ := devConfig.InitializeCommand.AsObject()
-			commands := devConfig.InitializeCommand.ToStringSlice()
-			for _, cmdStr := range commands {
-				if cmdStr == "" {
-					continue
-				}
-				if config.Verbose {
-					fmt.Fprintf(os.Stderr, "Executing: %s\n", cmdStr)
-				}
-				cmd := exec.Command("/bin/sh", "-c", cmdStr)
-				cmd.Dir = mountPath
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				if err = cmd.Run(); err != nil {
-					break
-				}
-			}
-			_ = obj // Suppress unused warning
+			err = executeHostCommandsParallel(obj, mountPath, config.Verbose)
 		}
 
 		if err != nil {
@@ -1771,4 +1756,85 @@ func copyFileViaExec(dockerClient *docker.Client, containerID, srcPath, dstPath,
 	// This function is no longer used for Apple Container
 	// Just return error for now
 	return fmt.Errorf("file copying not supported for Apple Container")
+}
+
+// executeHostCommandsParallel executes multiple host commands in parallel
+// This is used for initializeCommand object format to match Microsoft specification
+func executeHostCommandsParallel(commands map[string]interface{}, workDir string, verbose bool) error {
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(commands))
+
+	for name, cmd := range commands {
+		wg.Add(1)
+		go func(taskName string, taskCmd interface{}) {
+			defer wg.Done()
+
+			var err error
+			switch v := taskCmd.(type) {
+			case string:
+				// String command: execute with shell
+				if verbose {
+					fmt.Fprintf(os.Stderr, "Executing task '%s': %s\n", taskName, v)
+				}
+				execCmd := exec.Command("/bin/sh", "-c", v)
+				execCmd.Dir = workDir
+				execCmd.Stdout = os.Stdout
+				execCmd.Stderr = os.Stderr
+				err = execCmd.Run()
+			case []interface{}:
+				// Array command: execute directly without shell
+				strArray := make([]string, len(v))
+				for i, item := range v {
+					if s, ok := item.(string); ok {
+						strArray[i] = s
+					} else {
+						err = fmt.Errorf("task %s: invalid command array element type: %T", taskName, item)
+						errChan <- err
+						return
+					}
+				}
+				if len(strArray) > 0 {
+					if verbose {
+						fmt.Fprintf(os.Stderr, "Executing task '%s': %v\n", taskName, strArray)
+					}
+					execCmd := exec.Command(strArray[0], strArray[1:]...)
+					execCmd.Dir = workDir
+					execCmd.Stdout = os.Stdout
+					execCmd.Stderr = os.Stderr
+					err = execCmd.Run()
+				}
+			default:
+				err = fmt.Errorf("task %s: invalid command type: %T", taskName, taskCmd)
+			}
+
+			if err != nil {
+				errChan <- fmt.Errorf("task %s: %w", taskName, err)
+			}
+		}(name, cmd)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Collect all errors
+	var errors []error
+	for err := range errChan {
+		errors = append(errors, err)
+	}
+
+	if len(errors) == 0 {
+		return nil
+	}
+
+	// Return single error or combined error message
+	if len(errors) == 1 {
+		return errors[0]
+	}
+
+	// Multiple errors - combine them
+	errMsg := "multiple tasks failed:"
+	for _, err := range errors {
+		errMsg += fmt.Sprintf("\n  - %s", err.Error())
+	}
+	return fmt.Errorf("%s", errMsg)
 }

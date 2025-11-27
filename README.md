@@ -328,6 +328,7 @@ packnplay achieves **97% Microsoft devcontainer specification compliance**—pro
 - **Formats**: Integers (`3000`), strings (`"8080:3000"`), IP binding (`"127.0.0.1:8080:3000"`)
 
 **✅ Lifecycle Commands:**
+- `initializeCommand` - Runs on host before container creation
 - `onCreateCommand` - Runs once on creation (tracks changes)
 - `updateContentCommand` - Content change hooks
 - `postCreateCommand` - Runs once after creation
@@ -342,10 +343,9 @@ packnplay achieves **97% Microsoft devcontainer specification compliance**—pro
 - **Signal Handling**: Graceful shutdown with SIGTERM
 - **Feature Integration**: Complete metadata processing
 
-#### **🚧 Minor Gaps (3% of specification)**
+#### **🚧 Minor Gaps (2% of specification)**
 
 **Would complete specification:**
-- ❌ `initializeCommand` - Host-side pre-container execution
 - ❌ `remoteEnv` - Container-computed environment variables
 - ❌ Container restart (recreates stopped containers instead)
 

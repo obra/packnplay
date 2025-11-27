@@ -157,6 +157,26 @@ Ports to expose from the container.
 
 ### Lifecycle Commands
 
+#### `initializeCommand`
+Runs **on the host** before the container is created.
+
+```json
+{
+  "initializeCommand": "npm install"
+}
+```
+
+**Behavior:**
+- Executes on the host machine (not in container)
+- Runs before container creation
+- Ideal for: downloading dependencies, generating files, pre-build setup
+- **Security warning**: Executes code from devcontainer.json on your host
+
+**Important Notes:**
+- This command runs with your host user permissions
+- Use with caution as it executes arbitrary commands on your host system
+- The working directory is the project directory (where devcontainer.json is located)
+
 #### `onCreateCommand`
 Runs **once** when the container is first created.
 
@@ -232,6 +252,8 @@ Executed directly without shell, safer for complex arguments.
 }
 ```
 Executes multiple commands in parallel. Values can be strings or arrays.
+
+**Note:** All lifecycle commands support parallel execution via object format, including `initializeCommand` which runs parallel tasks on the host.
 
 ### Custom Mounts
 
@@ -735,19 +757,11 @@ packnplay focuses on **core devcontainer functionality for AI coding agents** wh
    - **Why**: Editor-agnostic tool, not tied to VS Code
    - **Alternative**: Configure your editor separately
 
-### Out of Scope (Security/Complexity)
+### Out of Scope (Complexity)
 
-2. **`initializeCommand`**: Runs on host before container starts
-   - **Why**: Security concern (arbitrary host code execution)
-   - **Alternative**: Use shell scripts or Makefile on host
-
-3. **`updateContentCommand`**: Runs when container content changes
+2. **`updateContentCommand`**: Runs when container content changes
    - **Why**: Requires content change detection system
    - **Alternative**: Use `postCreateCommand` for one-time setup
-
-4. **`postAttachCommand`**: Runs after attaching to container
-   - **Why**: Requires attach detection infrastructure
-   - **Alternative**: Run commands manually after attach
 
 ### Future Enhancements
 
@@ -885,9 +899,11 @@ Packnplay implements a **subset** of the devcontainer specification:
 | `forwardPorts` | ✅ | ✅ |
 | `mounts` | ✅ | ✅ |
 | `runArgs` | ✅ | ✅ |
+| `initializeCommand` | ✅ | ✅ |
 | `onCreateCommand` | ✅ | ✅ |
 | `postCreateCommand` | ✅ | ✅ |
 | `postStartCommand` | ✅ | ✅ |
+| `postAttachCommand` | ✅ | ✅ |
 | Variable substitution | ✅ (subset) | ✅ (full) |
 | `features` | ✅ | ✅ |
 | `customizations` | ❌ | ✅ |
