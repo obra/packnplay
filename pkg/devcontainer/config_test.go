@@ -402,3 +402,183 @@ func TestConfig_ShouldOverrideCommand(t *testing.T) {
 		})
 	}
 }
+
+func TestPortAttributes_RequireLocalPortAndElevateIfNeeded(t *testing.T) {
+	tests := []struct {
+		name                    string
+		json                    string
+		wantRequireLocalPort    *bool
+		wantElevateIfNeeded     *bool
+		wantLabel               string
+	}{
+		{
+			name: "requireLocalPort true, elevateIfNeeded false",
+			json: `{
+				"image": "alpine:latest",
+				"portsAttributes": {
+					"3000": {
+						"label": "App",
+						"requireLocalPort": true,
+						"elevateIfNeeded": false
+					}
+				}
+			}`,
+			wantRequireLocalPort: func() *bool { v := true; return &v }(),
+			wantElevateIfNeeded:  func() *bool { v := false; return &v }(),
+			wantLabel:            "App",
+		},
+		{
+			name: "requireLocalPort false, elevateIfNeeded true",
+			json: `{
+				"image": "alpine:latest",
+				"portsAttributes": {
+					"8080": {
+						"label": "API",
+						"requireLocalPort": false,
+						"elevateIfNeeded": true
+					}
+				}
+			}`,
+			wantRequireLocalPort: func() *bool { v := false; return &v }(),
+			wantElevateIfNeeded:  func() *bool { v := true; return &v }(),
+			wantLabel:            "API",
+		},
+		{
+			name: "both fields omitted",
+			json: `{
+				"image": "alpine:latest",
+				"portsAttributes": {
+					"9000": {
+						"label": "DB"
+					}
+				}
+			}`,
+			wantRequireLocalPort: nil,
+			wantElevateIfNeeded:  nil,
+			wantLabel:            "DB",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var config Config
+			err := json.Unmarshal([]byte(tt.json), &config)
+			require.NoError(t, err)
+
+			// Find the first port
+			var attrs PortAttributes
+			for _, v := range config.PortsAttributes {
+				attrs = v
+				break
+			}
+
+			assert.Equal(t, tt.wantLabel, attrs.Label)
+
+			if tt.wantRequireLocalPort == nil {
+				assert.Nil(t, attrs.RequireLocalPort)
+			} else {
+				require.NotNil(t, attrs.RequireLocalPort)
+				assert.Equal(t, *tt.wantRequireLocalPort, *attrs.RequireLocalPort)
+			}
+
+			if tt.wantElevateIfNeeded == nil {
+				assert.Nil(t, attrs.ElevateIfNeeded)
+			} else {
+				require.NotNil(t, attrs.ElevateIfNeeded)
+				assert.Equal(t, *tt.wantElevateIfNeeded, *attrs.ElevateIfNeeded)
+			}
+		})
+	}
+}
+
+func TestConfig_SecurityProperties(t *testing.T) {
+	tests := []struct {
+		name           string
+		json           string
+		wantPrivileged *bool
+		wantInit       *bool
+		wantCapAdd     []string
+		wantSecurityOpt []string
+		wantEntrypoint interface{} // can be string or []string
+	}{
+		{
+			name: "all security properties present",
+			json: `{
+				"image": "alpine:latest",
+				"privileged": true,
+				"init": true,
+				"capAdd": ["SYS_ADMIN", "NET_ADMIN"],
+				"securityOpt": ["seccomp=unconfined", "apparmor=unconfined"],
+				"entrypoint": "/bin/sh"
+			}`,
+			wantPrivileged: boolPtr(true),
+			wantInit:       boolPtr(true),
+			wantCapAdd:     []string{"SYS_ADMIN", "NET_ADMIN"},
+			wantSecurityOpt: []string{"seccomp=unconfined", "apparmor=unconfined"},
+			wantEntrypoint: "/bin/sh",
+		},
+		{
+			name: "entrypoint as array",
+			json: `{
+				"image": "alpine:latest",
+				"entrypoint": ["/bin/sh", "-c"]
+			}`,
+			wantPrivileged: nil,
+			wantInit:       nil,
+			wantCapAdd:     nil,
+			wantSecurityOpt: nil,
+			wantEntrypoint: []string{"/bin/sh", "-c"},
+		},
+		{
+			name: "privileged false",
+			json: `{
+				"image": "alpine:latest",
+				"privileged": false
+			}`,
+			wantPrivileged: boolPtr(false),
+			wantInit:       nil,
+			wantCapAdd:     nil,
+			wantSecurityOpt: nil,
+			wantEntrypoint: nil,
+		},
+		{
+			name:           "no security properties",
+			json:           `{"image": "alpine:latest"}`,
+			wantPrivileged: nil,
+			wantInit:       nil,
+			wantCapAdd:     nil,
+			wantSecurityOpt: nil,
+			wantEntrypoint: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var config Config
+			err := json.Unmarshal([]byte(tt.json), &config)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.wantPrivileged, config.Privileged)
+			assert.Equal(t, tt.wantInit, config.Init)
+			assert.Equal(t, tt.wantCapAdd, config.CapAdd)
+			assert.Equal(t, tt.wantSecurityOpt, config.SecurityOpt)
+
+			// Handle entrypoint which can be string or array
+			if tt.wantEntrypoint == nil {
+				assert.Nil(t, config.Entrypoint)
+			} else {
+				switch expected := tt.wantEntrypoint.(type) {
+				case string:
+					require.NotNil(t, config.Entrypoint)
+					assert.Equal(t, []string{expected}, config.Entrypoint)
+				case []string:
+					assert.Equal(t, expected, config.Entrypoint)
+				}
+			}
+		})
+	}
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}

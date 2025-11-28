@@ -699,6 +699,14 @@ func Run(config *RunConfig) error {
 				args = append(args, "--label",
 					fmt.Sprintf("devcontainer.port.%s.onAutoForward=%s", port, attrs.OnAutoForward))
 			}
+			if attrs.RequireLocalPort != nil {
+				args = append(args, "--label",
+					fmt.Sprintf("devcontainer.port.%s.requireLocalPort=%t", port, *attrs.RequireLocalPort))
+			}
+			if attrs.ElevateIfNeeded != nil {
+				args = append(args, "--label",
+					fmt.Sprintf("devcontainer.port.%s.elevateIfNeeded=%t", port, *attrs.ElevateIfNeeded))
+			}
 		}
 	}
 
@@ -1088,8 +1096,42 @@ func Run(config *RunConfig) error {
 		args = append(args, substitutedArg)
 	}
 
-	// Track entrypoint args from features (declared here so it's available later)
+	// Apply security properties from devcontainer.json
+	// These are applied before feature properties so features can override them if needed
+	if devConfig.Privileged != nil && *devConfig.Privileged {
+		args = append(args, "--privileged")
+	}
+
+	if devConfig.Init != nil && *devConfig.Init {
+		args = append(args, "--init")
+	}
+
+	for _, cap := range devConfig.CapAdd {
+		if cap != "" {
+			args = append(args, "--cap-add="+cap)
+		}
+	}
+
+	for _, secOpt := range devConfig.SecurityOpt {
+		if secOpt != "" {
+			args = append(args, "--security-opt="+secOpt)
+		}
+	}
+
+	// Track entrypoint args from features and config (declared here so it's available later)
 	var entrypointArgs []string
+	var entrypointSet bool
+	var entrypointSource string
+
+	// Apply entrypoint from devcontainer.json if specified
+	if len(devConfig.Entrypoint) > 0 {
+		args = append(args, "--entrypoint="+devConfig.Entrypoint[0])
+		if len(devConfig.Entrypoint) > 1 {
+			entrypointArgs = devConfig.Entrypoint[1:]
+		}
+		entrypointSet = true
+		entrypointSource = "devcontainer.json"
+	}
 
 	// Apply feature-contributed container properties (security options, capabilities, etc.)
 	if len(devConfig.Features) > 0 {

@@ -3467,6 +3467,72 @@ func TestE2E_PortsAttributes(t *testing.T) {
 	t.Log("Port attributes verified successfully")
 }
 
+// TestE2E_PortsAttributes_RequireLocalPortAndElevate tests requireLocalPort and elevateIfNeeded attributes
+func TestE2E_PortsAttributes_RequireLocalPortAndElevate(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+  "image": "alpine:latest",
+  "forwardPorts": [3000, 8080, 9000],
+  "portsAttributes": {
+    "3000": {
+      "label": "Application",
+      "requireLocalPort": true,
+      "elevateIfNeeded": false
+    },
+    "8080": {
+      "label": "API Server",
+      "requireLocalPort": false,
+      "elevateIfNeeded": true
+    },
+    "9000": {
+      "label": "No Booleans"
+    }
+  }
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Start container
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "test")
+	require.NoError(t, err, "Failed to run packnplay: %s", output)
+
+	// Inspect container to verify port labels were applied
+	inspectData, err := inspectContainer(t, containerName)
+	require.NoError(t, err, "Failed to inspect container")
+
+	// Get labels from Config.Labels
+	labels, ok := inspectData["Config"].(map[string]interface{})["Labels"].(map[string]interface{})
+	require.True(t, ok, "Failed to get container labels")
+
+	// Verify port 3000 labels (requireLocalPort=true, elevateIfNeeded=false)
+	assert.Equal(t, "Application", labels["devcontainer.port.3000.label"], "Port 3000 label should be 'Application'")
+	assert.Equal(t, "true", labels["devcontainer.port.3000.requireLocalPort"], "Port 3000 requireLocalPort should be 'true'")
+	assert.Equal(t, "false", labels["devcontainer.port.3000.elevateIfNeeded"], "Port 3000 elevateIfNeeded should be 'false'")
+
+	// Verify port 8080 labels (requireLocalPort=false, elevateIfNeeded=true)
+	assert.Equal(t, "API Server", labels["devcontainer.port.8080.label"], "Port 8080 label should be 'API Server'")
+	assert.Equal(t, "false", labels["devcontainer.port.8080.requireLocalPort"], "Port 8080 requireLocalPort should be 'false'")
+	assert.Equal(t, "true", labels["devcontainer.port.8080.elevateIfNeeded"], "Port 8080 elevateIfNeeded should be 'true'")
+
+	// Verify port 9000 has no requireLocalPort or elevateIfNeeded labels (they weren't set)
+	assert.Equal(t, "No Booleans", labels["devcontainer.port.9000.label"], "Port 9000 label should be 'No Booleans'")
+	assert.NotContains(t, labels, "devcontainer.port.9000.requireLocalPort", "Port 9000 should not have requireLocalPort label")
+	assert.NotContains(t, labels, "devcontainer.port.9000.elevateIfNeeded", "Port 9000 should not have elevateIfNeeded label")
+
+	t.Log("Port attributes with requireLocalPort and elevateIfNeeded verified successfully")
+}
+
 // TestE2E_DockerCompose_SingleService tests basic Docker Compose support
 func TestE2E_DockerCompose_SingleService(t *testing.T) {
 	skipIfNoDocker(t)
