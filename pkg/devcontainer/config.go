@@ -41,7 +41,8 @@ type Config struct {
 	DockerFile   string                 `json:"dockerFile"`
 	Build        *BuildConfig           `json:"build,omitempty"`
 	Name         string                 `json:"name,omitempty"`          // Display name for the dev container
-	RemoteUser      string                    `json:"remoteUser"`
+	ContainerUser   string                    `json:"containerUser,omitempty"` // User for container operations (docker run --user)
+	RemoteUser      string                    `json:"remoteUser"`              // User for remote operations (docker exec --user)
 	ContainerEnv    map[string]string         `json:"containerEnv,omitempty"`
 	RemoteEnv       map[string]string         `json:"remoteEnv,omitempty"`
 	ForwardPorts    []interface{}             `json:"forwardPorts,omitempty"`    // int or string

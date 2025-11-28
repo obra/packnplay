@@ -1628,6 +1628,84 @@ func TestE2E_UserAutoDetection(t *testing.T) {
 	t.Logf("Auto-detected user: %s", strings.TrimSpace(output))
 }
 
+// TestE2E_ContainerUser tests containerUser property (docker run --user)
+func TestE2E_ContainerUser(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+  "image": "alpine:latest",
+  "containerUser": "nobody",
+  "remoteUser": "root"
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run command - should execute as remoteUser (root)
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "whoami")
+	require.NoError(t, err, "Failed to run whoami: %s", output)
+	require.Contains(t, output, "root", "Command should execute as remoteUser")
+
+	// Verify container was started with containerUser (nobody)
+	containerID := getContainerIDByName(t, containerName)
+	inspectData, err := inspectContainer(t, containerID)
+	require.NoError(t, err, "Failed to inspect container")
+
+	// Check Config.User field (set by docker run --user)
+	config, ok := inspectData["Config"].(map[string]interface{})
+	require.True(t, ok, "Config field should exist")
+	user, ok := config["User"].(string)
+	require.True(t, ok, "User field should exist in Config")
+	require.Equal(t, "nobody", user, "Container should be created with containerUser")
+}
+
+// TestE2E_ContainerUser_BackwardCompat tests backward compatibility when only remoteUser is set
+func TestE2E_ContainerUser_BackwardCompat(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+  "image": "alpine:latest",
+  "remoteUser": "nobody"
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run command - should execute as remoteUser (nobody)
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "whoami")
+	require.NoError(t, err, "Failed to run whoami: %s", output)
+	require.Contains(t, output, "nobody", "Command should execute as remoteUser")
+
+	// Verify container was started with remoteUser when containerUser not set
+	containerID := getContainerIDByName(t, containerName)
+	inspectData, err := inspectContainer(t, containerID)
+	require.NoError(t, err, "Failed to inspect container")
+
+	config, ok := inspectData["Config"].(map[string]interface{})
+	require.True(t, ok, "Config field should exist")
+	user, ok := config["User"].(string)
+	require.True(t, ok, "User field should exist in Config")
+	require.Equal(t, "nobody", user, "Container should use remoteUser when containerUser not specified")
+}
+
 // ============================================================================
 // Section 2.9: Integration Tests
 // ============================================================================

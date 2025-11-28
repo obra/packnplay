@@ -959,9 +959,14 @@ func Run(config *RunConfig) error {
 		args = append(args, "--mount", substitutedMount)
 	}
 
-	// Add user from remoteUser setting
-	if devConfig.RemoteUser != "" {
-		args = append(args, "--user", devConfig.RemoteUser)
+	// Add user for container operations (docker run --user)
+	// Use containerUser if specified, otherwise fall back to remoteUser for backward compatibility
+	containerUser := devConfig.ContainerUser
+	if containerUser == "" {
+		containerUser = devConfig.RemoteUser
+	}
+	if containerUser != "" {
+		args = append(args, "--user", containerUser)
 	}
 
 	// Add custom Docker run arguments from devcontainer.json
