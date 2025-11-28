@@ -43,6 +43,7 @@ type Config struct {
 	Name         string                 `json:"name,omitempty"`          // Display name for the dev container
 	ContainerUser   string                    `json:"containerUser,omitempty"` // User for container operations (docker run --user)
 	RemoteUser      string                    `json:"remoteUser"`              // User for remote operations (docker exec --user)
+	UpdateRemoteUserUID bool                  `json:"updateRemoteUserUID,omitempty"` // Sync container user UID/GID to match host (Linux only)
 	ContainerEnv    map[string]string         `json:"containerEnv,omitempty"`
 	RemoteEnv       map[string]string         `json:"remoteEnv,omitempty"`
 	ForwardPorts    []interface{}             `json:"forwardPorts,omitempty"`    // int or string

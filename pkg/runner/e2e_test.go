@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -3678,4 +3679,91 @@ func TestE2E_HostRequirements_Warning(t *testing.T) {
 	require.NoError(t, err, "Should continue despite unmet requirements")
 	require.Contains(t, output, "Host requirements not met", "Should warn about requirements")
 	require.Contains(t, output, "works", "Container should still run despite warnings")
+}
+
+// TestE2E_UpdateRemoteUserUID verifies that updateRemoteUserUID syncs container
+// user UID/GID to match host user on Linux (skipped on macOS/Windows)
+func TestE2E_UpdateRemoteUserUID(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Skip on non-Linux platforms (Docker Desktop handles this automatically)
+	if runtime.GOOS != "linux" {
+		t.Skip("updateRemoteUserUID is Linux-only (Docker Desktop handles UID/GID mapping automatically)")
+	}
+
+	// Get host UID/GID
+	hostUID := os.Getuid()
+	hostGID := os.Getgid()
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+  "image": "ubuntu:latest",
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run container with updateRemoteUserUID
+	_, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "sleep", "10")
+	require.NoError(t, err, "Container should start successfully")
+
+	// Wait for container to be running
+	err = waitForContainer(t, containerName, 30*time.Second)
+	require.NoError(t, err, "Container should be running")
+
+	// Check that vscode user's UID matches host UID
+	output, err := execInContainer(t, containerName, []string{"id", "-u", "vscode"})
+	require.NoError(t, err, "Should be able to check vscode UID")
+	containerUID := strings.TrimSpace(output)
+	assert.Equal(t, fmt.Sprintf("%d", hostUID), containerUID, "Container user UID should match host UID")
+
+	// Check that vscode user's GID matches host GID
+	output, err = execInContainer(t, containerName, []string{"id", "-g", "vscode"})
+	require.NoError(t, err, "Should be able to check vscode GID")
+	containerGID := strings.TrimSpace(output)
+	assert.Equal(t, fmt.Sprintf("%d", hostGID), containerGID, "Container user GID should match host GID")
+}
+
+// TestE2E_UpdateRemoteUserUID_NotOnMacOS verifies that updateRemoteUserUID
+// is skipped on macOS (where Docker Desktop handles UID/GID mapping)
+func TestE2E_UpdateRemoteUserUID_NotOnMacOS(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Only run on macOS
+	if runtime.GOOS != "darwin" {
+		t.Skip("This test verifies macOS-specific behavior")
+	}
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+  "image": "alpine:latest",
+  "updateRemoteUserUID": true
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run should succeed and skip UID/GID sync
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "works")
+	require.NoError(t, err, "Container should start successfully")
+	require.Contains(t, output, "works", "Container should run normally")
+	// We don't check for a skip message - just verify it doesn't error
 }
