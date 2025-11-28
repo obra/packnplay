@@ -259,6 +259,61 @@ func TestGetImageID(t *testing.T) {
 	t.Logf("Image ID: %s", imageID)
 }
 
+func TestGetShellFlags(t *testing.T) {
+	tests := []struct {
+		name         string
+		userEnvProbe string
+		wantFlags    []string
+	}{
+		{
+			name:         "none - no flags",
+			userEnvProbe: "none",
+			wantFlags:    []string{},
+		},
+		{
+			name:         "loginShell - login flag",
+			userEnvProbe: "loginShell",
+			wantFlags:    []string{"-l"},
+		},
+		{
+			name:         "interactiveShell - interactive flag",
+			userEnvProbe: "interactiveShell",
+			wantFlags:    []string{"-i"},
+		},
+		{
+			name:         "loginInteractiveShell - both flags",
+			userEnvProbe: "loginInteractiveShell",
+			wantFlags:    []string{"-l", "-i"},
+		},
+		{
+			name:         "empty defaults to loginInteractiveShell",
+			userEnvProbe: "",
+			wantFlags:    []string{"-l", "-i"},
+		},
+		{
+			name:         "unknown value defaults to loginInteractiveShell",
+			userEnvProbe: "invalidValue",
+			wantFlags:    []string{"-l", "-i"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			flags := getShellFlags(tt.userEnvProbe)
+			if len(flags) != len(tt.wantFlags) {
+				t.Errorf("getShellFlags(%q) = %v, want %v", tt.userEnvProbe, flags, tt.wantFlags)
+				return
+			}
+			for i := range flags {
+				if flags[i] != tt.wantFlags[i] {
+					t.Errorf("getShellFlags(%q) = %v, want %v", tt.userEnvProbe, flags, tt.wantFlags)
+					return
+				}
+			}
+		})
+	}
+}
+
 // Helper function to check if Docker is available for testing
 func isDockerAvailable() bool {
 	// Skip Docker tests in CI since CI itself runs in Docker

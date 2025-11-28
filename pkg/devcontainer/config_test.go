@@ -184,6 +184,64 @@ func TestConfig_AllLifecycleCommands(t *testing.T) {
 	assert.Equal(t, "echo attached", cmd)
 }
 
+func TestConfig_UserEnvProbe(t *testing.T) {
+	tests := []struct {
+		name            string
+		json            string
+		wantUserEnvProbe string
+	}{
+		{
+			name: "userEnvProbe set to none",
+			json: `{
+				"image": "alpine:latest",
+				"userEnvProbe": "none"
+			}`,
+			wantUserEnvProbe: "none",
+		},
+		{
+			name: "userEnvProbe set to loginShell",
+			json: `{
+				"image": "alpine:latest",
+				"userEnvProbe": "loginShell"
+			}`,
+			wantUserEnvProbe: "loginShell",
+		},
+		{
+			name: "userEnvProbe set to interactiveShell",
+			json: `{
+				"image": "alpine:latest",
+				"userEnvProbe": "interactiveShell"
+			}`,
+			wantUserEnvProbe: "interactiveShell",
+		},
+		{
+			name: "userEnvProbe set to loginInteractiveShell",
+			json: `{
+				"image": "alpine:latest",
+				"userEnvProbe": "loginInteractiveShell"
+			}`,
+			wantUserEnvProbe: "loginInteractiveShell",
+		},
+		{
+			name: "userEnvProbe not set (empty)",
+			json: `{
+				"image": "alpine:latest"
+			}`,
+			wantUserEnvProbe: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var config Config
+			err := json.Unmarshal([]byte(tt.json), &config)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.wantUserEnvProbe, config.UserEnvProbe)
+		})
+	}
+}
+
 func TestLoadLockFile(t *testing.T) {
 	tests := []struct {
 		name        string

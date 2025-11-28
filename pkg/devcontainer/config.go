@@ -44,6 +44,7 @@ type Config struct {
 	ContainerUser   string                    `json:"containerUser,omitempty"` // User for container operations (docker run --user)
 	RemoteUser      string                    `json:"remoteUser"`              // User for remote operations (docker exec --user)
 	UpdateRemoteUserUID bool                  `json:"updateRemoteUserUID,omitempty"` // Sync container user UID/GID to match host (Linux only)
+	UserEnvProbe    string                    `json:"userEnvProbe,omitempty"`  // Shell type for environment probing: none, loginShell, interactiveShell, loginInteractiveShell
 	ContainerEnv    map[string]string         `json:"containerEnv,omitempty"`
 	RemoteEnv       map[string]string         `json:"remoteEnv,omitempty"`
 	ForwardPorts    []interface{}             `json:"forwardPorts,omitempty"`    // int or string
@@ -97,7 +98,10 @@ func LoadConfig(projectPath string) (*Config, error) {
 
 	// If RemoteUser is not specified, detect the best user for the image
 	if config.RemoteUser == "" && config.Image != "" {
-		userResult, err := userdetect.DetectContainerUser(config.Image, nil)
+		userResult, err := userdetect.DetectContainerUser(config.Image, &userdetect.DevcontainerConfig{
+			RemoteUser:   config.RemoteUser,
+			UserEnvProbe: config.UserEnvProbe,
+		})
 		if err != nil {
 			// If detection fails, fall back to a safe default
 			config.RemoteUser = "root"

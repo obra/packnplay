@@ -12,7 +12,8 @@ import (
 
 // DevcontainerConfig represents the relevant parts of devcontainer.json for user detection
 type DevcontainerConfig struct {
-	RemoteUser string `json:"remoteUser,omitempty"`
+	RemoteUser   string `json:"remoteUser,omitempty"`
+	UserEnvProbe string `json:"userEnvProbe,omitempty"`
 }
 
 // UserDetectionResult contains the detected user and metadata about how it was detected
@@ -42,6 +43,12 @@ type CachedUserResult struct {
 // DetectContainerUser determines the best user to use for a container
 // Priority: devcontainer.json > cached result > runtime detection > fallback
 func DetectContainerUser(image string, devcontainer *DevcontainerConfig) (*UserDetectionResult, error) {
+	// Extract userEnvProbe setting (defaults to empty string if not set)
+	var userEnvProbe string
+	if devcontainer != nil {
+		userEnvProbe = devcontainer.UserEnvProbe
+	}
+
 	// 1. Check devcontainer.json first
 	if devcontainer != nil && devcontainer.RemoteUser != "" {
 		homeDir := "/root"
@@ -70,8 +77,8 @@ func DetectContainerUser(image string, devcontainer *DevcontainerConfig) (*UserD
 		}, nil
 	}
 
-	// 4. Do direct runtime detection
-	result, err := detectRuntimeUserDirect(image)
+	// 4. Do direct runtime detection with userEnvProbe setting
+	result, err := detectRuntimeUserDirectWithProbe(image, userEnvProbe)
 	if err != nil {
 		// Fallback to root if detection fails
 		result = &UserDetectionResult{
@@ -133,10 +140,39 @@ func GetImageDefaultUser(image string) (string, error) {
 	return user, nil
 }
 
+// getShellFlags returns the appropriate shell flags based on userEnvProbe setting
+func getShellFlags(userEnvProbe string) []string {
+	switch userEnvProbe {
+	case "none":
+		return []string{}
+	case "loginShell":
+		return []string{"-l"}
+	case "interactiveShell":
+		return []string{"-i"}
+	case "loginInteractiveShell":
+		return []string{"-l", "-i"}
+	default:
+		// Default to loginInteractiveShell for empty or unknown values
+		return []string{"-l", "-i"}
+	}
+}
+
 // detectRuntimeUserDirect asks the container directly what user it runs as
 func detectRuntimeUserDirect(image string) (*UserDetectionResult, error) {
-	// Run container and ask it directly who it is and where home is
-	cmd := exec.Command("docker", "run", "--rm", image, "sh", "-c", "whoami && echo $HOME")
+	return detectRuntimeUserDirectWithProbe(image, "")
+}
+
+// detectRuntimeUserDirectWithProbe asks the container directly what user it runs as
+// using the specified userEnvProbe setting
+func detectRuntimeUserDirectWithProbe(image string, userEnvProbe string) (*UserDetectionResult, error) {
+	shellFlags := getShellFlags(userEnvProbe)
+
+	// Build command: docker run --rm <image> sh <flags> -c "whoami && echo $HOME"
+	args := []string{"run", "--rm", image, "sh"}
+	args = append(args, shellFlags...)
+	args = append(args, "-c", "whoami && echo $HOME")
+
+	cmd := exec.Command("docker", args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to detect user in image %s: %w", image, err)

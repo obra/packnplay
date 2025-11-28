@@ -359,7 +359,10 @@ func Run(config *RunConfig) error {
 	// For built images, the image name is derived from project path
 	if devConfig.RemoteUser == "" && (devConfig.HasDockerfile() || len(devConfig.Features) > 0) {
 		builtImageName := container.GenerateImageName(workDir)
-		userResult, err := userdetect.DetectContainerUser(builtImageName, nil)
+		userResult, err := userdetect.DetectContainerUser(builtImageName, &userdetect.DevcontainerConfig{
+			RemoteUser:   devConfig.RemoteUser,
+			UserEnvProbe: devConfig.UserEnvProbe,
+		})
 		if err != nil {
 			// If detection fails, fall back to root
 			devConfig.RemoteUser = "root"
