@@ -42,6 +42,11 @@ type Config struct {
 	RunArgs         []string                  `json:"runArgs,omitempty"`         // Additional docker run arguments
 	Features        map[string]interface{}    `json:"features,omitempty"`
 
+	// Docker Compose orchestration (alternative to image/dockerfile)
+	DockerComposeFile interface{} `json:"dockerComposeFile,omitempty"` // string or []string - path(s) to compose file(s)
+	Service           string      `json:"service,omitempty"`           // Service name to connect to
+	RunServices       []string    `json:"runServices,omitempty"`       // Services to start (empty = all services)
+
 	// Workspace configuration - CRITICAL for proper workspace setup
 	WorkspaceFolder string `json:"workspaceFolder,omitempty"` // Path inside container where workspace should be
 	WorkspaceMount  string `json:"workspaceMount,omitempty"`  // Custom mount string for workspace
@@ -122,6 +127,31 @@ func (c *Config) GetDockerfile() string {
 // HasDockerfile returns true if a dockerfile is specified
 func (c *Config) HasDockerfile() bool {
 	return c.GetDockerfile() != ""
+}
+
+// GetDockerComposeFiles returns dockerComposeFile as a string slice
+// Handles both string and []string JSON values
+func (c *Config) GetDockerComposeFiles() []string {
+	if c.DockerComposeFile == nil {
+		return nil
+	}
+
+	switch v := c.DockerComposeFile.(type) {
+	case string:
+		return []string{v}
+	case []interface{}:
+		result := make([]string, 0, len(v))
+		for _, item := range v {
+			if str, ok := item.(string); ok {
+				result = append(result, str)
+			}
+		}
+		return result
+	case []string:
+		return v
+	default:
+		return nil
+	}
 }
 
 // GetResolvedEnvironment applies variable substitution and returns resolved environment variables

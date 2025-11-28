@@ -3349,3 +3349,143 @@ func TestE2E_PortsAttributes(t *testing.T) {
 
 	t.Log("Port attributes verified successfully")
 }
+
+// TestE2E_DockerCompose_SingleService tests basic Docker Compose support
+func TestE2E_DockerCompose_SingleService(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create test project with docker-compose.yml
+	projectDir := createTestProject(t, map[string]string{
+		"docker-compose.yml": `version: '3.8'
+services:
+  app:
+    image: alpine:latest
+    command: sleep infinity
+    working_dir: /workspace
+`,
+		".devcontainer/devcontainer.json": `{
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace"
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	// Clean up compose stack on exit
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		downCmd := exec.CommandContext(ctx, "docker", "compose", "-f", filepath.Join(projectDir, "docker-compose.yml"), "down", "-v")
+		downCmd.Dir = projectDir
+		_ = downCmd.Run()
+	}()
+
+	// Run packnplay with compose configuration
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "compose-test")
+	require.NoError(t, err, "Failed to run packnplay with compose: %s", output)
+	require.Contains(t, output, "compose-test", "Expected command output not found")
+
+	t.Log("Docker Compose single service test completed successfully")
+}
+
+// TestE2E_DockerCompose_WithLifecycleCommands tests Docker Compose with lifecycle commands
+func TestE2E_DockerCompose_WithLifecycleCommands(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create test project with docker-compose.yml and lifecycle commands
+	projectDir := createTestProject(t, map[string]string{
+		"docker-compose.yml": `version: '3.8'
+services:
+  app:
+    image: alpine:latest
+    command: sleep infinity
+    working_dir: /workspace
+`,
+		".devcontainer/devcontainer.json": `{
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "onCreateCommand": "touch /tmp/oncreate-ran",
+  "postCreateCommand": "touch /tmp/postcreate-ran",
+  "postStartCommand": "touch /tmp/poststart-ran"
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	// Clean up compose stack on exit
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		downCmd := exec.CommandContext(ctx, "docker", "compose", "-f", filepath.Join(projectDir, "docker-compose.yml"), "down", "-v")
+		downCmd.Dir = projectDir
+		_ = downCmd.Run()
+	}()
+
+	// Run packnplay with compose configuration
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "ls", "/tmp")
+	require.NoError(t, err, "Failed to run packnplay with compose: %s", output)
+
+	// Verify lifecycle commands ran
+	require.Contains(t, output, "oncreate-ran", "onCreateCommand should have executed")
+	require.Contains(t, output, "postcreate-ran", "postCreateCommand should have executed")
+	require.Contains(t, output, "poststart-ran", "postStartCommand should have executed")
+
+	t.Log("Docker Compose with lifecycle commands test completed successfully")
+}
+
+// TestE2E_DockerCompose_MultiService tests Docker Compose with multiple services
+func TestE2E_DockerCompose_MultiService(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create test project with docker-compose.yml containing multiple services
+	projectDir := createTestProject(t, map[string]string{
+		"docker-compose.yml": `version: '3.8'
+services:
+  app:
+    image: alpine:latest
+    command: sleep infinity
+    working_dir: /workspace
+    depends_on:
+      - db
+  db:
+    image: alpine:latest
+    command: sleep infinity
+`,
+		".devcontainer/devcontainer.json": `{
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "app",
+  "runServices": ["app", "db"],
+  "workspaceFolder": "/workspace"
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	// Clean up compose stack on exit
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		downCmd := exec.CommandContext(ctx, "docker", "compose", "-f", filepath.Join(projectDir, "docker-compose.yml"), "down", "-v")
+		downCmd.Dir = projectDir
+		_ = downCmd.Run()
+	}()
+
+	// Run packnplay with compose configuration
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "multi-service-test")
+	require.NoError(t, err, "Failed to run packnplay with compose: %s", output)
+	require.Contains(t, output, "multi-service-test", "Expected command output not found")
+
+	// Verify both services are running
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	psCmd := exec.CommandContext(ctx, "docker", "compose", "-f", filepath.Join(projectDir, "docker-compose.yml"), "ps", "-q")
+	psCmd.Dir = projectDir
+	psOutput, err := psCmd.Output()
+	require.NoError(t, err, "Failed to check running services")
+
+	// Should have at least 2 container IDs (app and db)
+	containerIDs := strings.Split(strings.TrimSpace(string(psOutput)), "\n")
+	require.GreaterOrEqual(t, len(containerIDs), 2, "Expected at least 2 services to be running")
+
+	t.Log("Docker Compose multi-service test completed successfully")
+}

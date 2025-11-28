@@ -15,6 +15,7 @@ import (
 
 	"github.com/mattn/go-isatty"
 	"github.com/obra/packnplay/pkg/aws"
+	"github.com/obra/packnplay/pkg/compose"
 	"github.com/obra/packnplay/pkg/config"
 	"github.com/obra/packnplay/pkg/container"
 	"github.com/obra/packnplay/pkg/devcontainer"
@@ -309,17 +310,34 @@ func Run(config *RunConfig) error {
 		devConfig = devcontainer.GetDefaultConfig(defaultImage)
 	}
 
-	// Step 3.5: Load lockfile if it exists
-	// This ensures consistent feature versions across image build, property resolution, and lifecycle merging
-	lockfile, err := devcontainer.LoadLockFile(mountPath)
-	if err != nil {
-		return fmt.Errorf("failed to load lockfile: %w", err)
+	// Step 3.5: Detect orchestration mode and route accordingly
+	composeFiles := devConfig.GetDockerComposeFiles()
+	isComposeMode := len(composeFiles) > 0
+	isImageMode := devConfig.Image != ""
+	isDockerfileMode := devConfig.HasDockerfile()
+
+	// Validate mutually exclusive modes
+	if isComposeMode && (isImageMode || isDockerfileMode) {
+		return fmt.Errorf("dockerComposeFile is mutually exclusive with image/build.dockerfile")
 	}
 
 	// Step 4: Initialize container client
 	dockerClient, err := docker.NewClientWithRuntime(config.Runtime, config.Verbose)
 	if err != nil {
 		return fmt.Errorf("failed to initialize container runtime: %w", err)
+	}
+
+	// Route to Docker Compose workflow if compose mode
+	if isComposeMode {
+		return runWithCompose(devConfig, config, mountPath, workDir, worktreeName, dockerClient)
+	}
+
+	// Continue with standard image/dockerfile workflow
+	// Step 4.5: Load lockfile if it exists
+	// This ensures consistent feature versions across image build, property resolution, and lifecycle merging
+	lockfile, err := devcontainer.LoadLockFile(mountPath)
+	if err != nil {
+		return fmt.Errorf("failed to load lockfile: %w", err)
 	}
 
 	// Step 5: Ensure image available using ImageManager service
@@ -1282,6 +1300,188 @@ func Run(config *RunConfig) error {
 
 	// Use syscall.Exec to replace current process
 	return syscall.Exec(cmdPath, execArgs, os.Environ())
+}
+
+// runWithCompose handles Docker Compose orchestration
+func runWithCompose(devConfig *devcontainer.Config, config *RunConfig, mountPath, workDir, worktreeName string, dockerClient *docker.Client) error {
+	// Validate compose configuration
+	if devConfig.Service == "" {
+		return fmt.Errorf("dockerComposeFile requires 'service' property")
+	}
+
+	composeFiles := devConfig.GetDockerComposeFiles()
+	if len(composeFiles) == 0 {
+		return fmt.Errorf("no compose files specified")
+	}
+
+	// Convert relative compose file paths to absolute paths
+	absoluteComposeFiles := make([]string, len(composeFiles))
+	for i, f := range composeFiles {
+		if filepath.IsAbs(f) {
+			absoluteComposeFiles[i] = f
+		} else {
+			absoluteComposeFiles[i] = filepath.Join(mountPath, f)
+		}
+	}
+
+	// Validate compose files exist
+	if err := compose.ValidateComposeFiles(mountPath, absoluteComposeFiles); err != nil {
+		return err
+	}
+
+	// Execute initializeCommand on HOST if present (same as standard workflow)
+	if devConfig.InitializeCommand != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  Running initializeCommand on host (executes code from devcontainer.json)...\n")
+
+		var err error
+		if devConfig.InitializeCommand.IsString() {
+			cmdStr, _ := devConfig.InitializeCommand.AsString()
+			if config.Verbose {
+				fmt.Fprintf(os.Stderr, "Executing: %s\n", cmdStr)
+			}
+			cmd := exec.Command("/bin/sh", "-c", cmdStr)
+			cmd.Dir = mountPath
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err = cmd.Run()
+		} else if devConfig.InitializeCommand.IsArray() {
+			cmdArray, _ := devConfig.InitializeCommand.AsArray()
+			if len(cmdArray) > 0 {
+				if config.Verbose {
+					fmt.Fprintf(os.Stderr, "Executing: %v\n", cmdArray)
+				}
+				cmd := exec.Command(cmdArray[0], cmdArray[1:]...)
+				cmd.Dir = mountPath
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				err = cmd.Run()
+			}
+		} else if devConfig.InitializeCommand.IsObject() {
+			obj, _ := devConfig.InitializeCommand.AsObject()
+			err = executeHostCommandsParallel(obj, mountPath, config.Verbose)
+		}
+
+		if err != nil {
+			return fmt.Errorf("initializeCommand failed: %w", err)
+		}
+
+		if config.Verbose {
+			fmt.Fprintf(os.Stderr, "initializeCommand completed successfully\n")
+		}
+	}
+
+	// Create compose runner
+	composeRunner := compose.NewRunner(
+		mountPath,
+		absoluteComposeFiles,
+		devConfig.Service,
+		devConfig.RunServices,
+		dockerClient,
+		config.Verbose,
+	)
+
+	// Start services
+	fmt.Fprintf(os.Stderr, "Starting Docker Compose services...\n")
+	containerID, err := composeRunner.Up()
+	if err != nil {
+		return err
+	}
+
+	if config.Verbose {
+		fmt.Fprintf(os.Stderr, "Service container ID: %s\n", containerID)
+	}
+
+	// Detect RemoteUser if not specified
+	if devConfig.RemoteUser == "" {
+		// For compose, we need to inspect the running container
+		inspectOutput, err := dockerClient.Run("inspect", "--format", "{{.Config.User}}", containerID)
+		if err == nil {
+			user := strings.TrimSpace(inspectOutput)
+			if user != "" && user != "0" {
+				devConfig.RemoteUser = user
+			} else {
+				devConfig.RemoteUser = "root"
+			}
+		} else {
+			devConfig.RemoteUser = "root"
+		}
+		if config.Verbose {
+			fmt.Fprintf(os.Stderr, "Detected user: %s\n", devConfig.RemoteUser)
+		}
+	}
+
+	// Determine workspace folder
+	workingDir := devConfig.WorkspaceFolder
+	if workingDir == "" {
+		workingDir = "/workspace"
+	}
+
+	// Execute lifecycle commands
+	hasLifecycleCommands := devConfig.OnCreateCommand != nil ||
+		devConfig.UpdateContentCommand != nil ||
+		devConfig.PostCreateCommand != nil ||
+		devConfig.PostStartCommand != nil
+
+	if hasLifecycleCommands {
+		// Load metadata for tracking lifecycle execution
+		metadata, err := LoadMetadata(containerID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to load metadata, commands will run: %v\n", err)
+			metadata = nil
+		}
+
+		executor := NewLifecycleExecutor(dockerClient, containerID, devConfig.RemoteUser, config.Verbose, metadata)
+
+		// onCreateCommand
+		if devConfig.OnCreateCommand != nil {
+			if config.Verbose {
+				fmt.Fprintf(os.Stderr, "Running onCreateCommand...\n")
+			}
+			if err := executor.Execute("onCreate", devConfig.OnCreateCommand); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: onCreateCommand failed: %v\n", err)
+			}
+		}
+
+		// updateContentCommand
+		if devConfig.UpdateContentCommand != nil {
+			if config.Verbose {
+				fmt.Fprintf(os.Stderr, "Running updateContentCommand...\n")
+			}
+			if err := executor.Execute("updateContent", devConfig.UpdateContentCommand); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: updateContentCommand failed: %v\n", err)
+			}
+		}
+
+		// postCreateCommand
+		if devConfig.PostCreateCommand != nil {
+			if config.Verbose {
+				fmt.Fprintf(os.Stderr, "Running postCreateCommand...\n")
+			}
+			if err := executor.Execute("postCreate", devConfig.PostCreateCommand); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: postCreateCommand failed: %v\n", err)
+			}
+		}
+
+		// postStartCommand
+		if devConfig.PostStartCommand != nil {
+			if config.Verbose {
+				fmt.Fprintf(os.Stderr, "Running postStartCommand...\n")
+			}
+			if err := executor.Execute("postStart", devConfig.PostStartCommand); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: postStartCommand failed: %v\n", err)
+			}
+		}
+
+		// Save metadata after lifecycle execution
+		if metadata != nil {
+			if err := SaveMetadata(metadata); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to save metadata: %v\n", err)
+			}
+		}
+	}
+
+	// Execute user command in the service container
+	return execIntoContainer(dockerClient, containerID, devConfig.RemoteUser, workingDir, config.Command)
 }
 
 func containerIsRunning(dockerClient *docker.Client, name string) (bool, error) {
