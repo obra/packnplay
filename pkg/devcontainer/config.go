@@ -73,6 +73,7 @@ type Config struct {
 	// Lifecycle control
 	WaitFor         string `json:"waitFor,omitempty"`         // Which lifecycle command to wait for before setup is complete
 	OverrideCommand *bool  `json:"overrideCommand,omitempty"` // Whether to override container CMD with user command (default: true)
+	ShutdownAction  string `json:"shutdownAction,omitempty"`  // What to do on exit: none (default), stopContainer, stopCompose
 
 	// Host requirements (advisory validation only)
 	HostRequirements *HostRequirements `json:"hostRequirements,omitempty"`

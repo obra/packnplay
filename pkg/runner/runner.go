@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"os/user"
 	"path/filepath"
 	"runtime"
@@ -185,7 +186,9 @@ func executePostStart(dockerClient *docker.Client, containerID string, remoteUse
 }
 
 // execIntoContainer replaces the current process with docker exec into the container
-func execIntoContainer(dockerClient *docker.Client, containerID string, remoteUser string, workingDir string, command []string, overrideCommand bool) error {
+// If shutdownAction is set (not empty, not "none"), it runs docker exec as a child process
+// with signal handling to perform cleanup on exit.
+func execIntoContainer(dockerClient *docker.Client, containerID string, remoteUser string, workingDir string, command []string, overrideCommand bool, shutdownAction string, composeFiles []string, composeWorkDir string) error {
 	cmdPath, err := exec.LookPath(dockerClient.Command())
 	if err != nil {
 		return fmt.Errorf("failed to find docker command: %w", err)
@@ -207,8 +210,98 @@ func execIntoContainer(dockerClient *docker.Client, containerID string, remoteUs
 		execArgs = append(execArgs, command...)
 	}
 
+	// If shutdownAction is set, run as child process with signal handling
+	// Otherwise, use syscall.Exec for traditional behavior
+	if shutdownAction != "" && shutdownAction != "none" {
+		return execWithShutdownAction(cmdPath, execArgs, shutdownAction, dockerClient, containerID, composeFiles, composeWorkDir)
+	}
+
 	// Use syscall.Exec to replace current process
 	return syscall.Exec(cmdPath, execArgs, os.Environ())
+}
+
+// execWithShutdownAction runs docker exec as a child process and handles shutdown actions
+func execWithShutdownAction(cmdPath string, execArgs []string, shutdownAction string, dockerClient *docker.Client, containerID string, composeFiles []string, composeWorkDir string) error {
+	// Create the exec command
+	cmd := exec.Command(cmdPath, execArgs[1:]...) // Skip the program name in execArgs
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// Set up signal handling
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Start the docker exec process
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start docker exec: %w", err)
+	}
+
+	// Wait for either the command to finish or a signal
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	var exitErr error
+	select {
+	case sig := <-sigChan:
+		// Received signal - forward to child process
+		if cmd.Process != nil {
+			_ = cmd.Process.Signal(sig)
+		}
+		// Wait for child to exit
+		exitErr = <-done
+
+	case exitErr = <-done:
+		// Command exited normally
+	}
+
+	// Perform shutdown action
+	if err := performShutdownAction(shutdownAction, dockerClient, containerID, composeFiles, composeWorkDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: shutdown action failed: %v\n", err)
+	}
+
+	return exitErr
+}
+
+// performShutdownAction executes the specified shutdown action
+func performShutdownAction(action string, dockerClient *docker.Client, containerID string, composeFiles []string, composeWorkDir string) error {
+	switch action {
+	case "stopContainer":
+		fmt.Fprintf(os.Stderr, "Stopping container %s...\n", containerID)
+		stopCmd := exec.Command(dockerClient.Command(), "stop", containerID)
+		if output, err := stopCmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to stop container: %w (output: %s)", err, output)
+		}
+		return nil
+
+	case "stopCompose":
+		if len(composeFiles) == 0 || composeWorkDir == "" {
+			return fmt.Errorf("stopCompose requires compose files and work directory")
+		}
+		fmt.Fprintf(os.Stderr, "Stopping Docker Compose services...\n")
+
+		args := []string{"compose"}
+		for _, f := range composeFiles {
+			args = append(args, "-f", f)
+		}
+		args = append(args, "down")
+
+		downCmd := exec.Command(dockerClient.Command(), args...)
+		downCmd.Dir = composeWorkDir
+		if output, err := downCmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to stop compose services: %w (output: %s)", err, output)
+		}
+		return nil
+
+	case "none", "":
+		// No action needed
+		return nil
+
+	default:
+		return fmt.Errorf("unknown shutdownAction: %s", action)
+	}
 }
 
 func Run(config *RunConfig) error {
@@ -493,7 +586,7 @@ func Run(config *RunConfig) error {
 		}
 
 		// Exec into existing container
-		return execIntoContainer(dockerClient, containerID, devConfig.RemoteUser, reconnectWorkingDir, config.Command, devConfig.ShouldOverrideCommand())
+		return execIntoContainer(dockerClient, containerID, devConfig.RemoteUser, reconnectWorkingDir, config.Command, devConfig.ShouldOverrideCommand(), devConfig.ShutdownAction, nil, "")
 	}
 
 	// Check for stopped container with same name and try to restart it
@@ -545,7 +638,7 @@ func Run(config *RunConfig) error {
 				}
 
 				// Exec into restarted container with user's command
-				return execIntoContainer(dockerClient, containerID, devConfig.RemoteUser, restartWorkingDir, config.Command, devConfig.ShouldOverrideCommand())
+				return execIntoContainer(dockerClient, containerID, devConfig.RemoteUser, restartWorkingDir, config.Command, devConfig.ShouldOverrideCommand(), devConfig.ShutdownAction, nil, "")
 			}
 
 			// Restart failed - log and fall through to recreation
@@ -1446,7 +1539,7 @@ func runWithCompose(devConfig *devcontainer.Config, config *RunConfig, mountPath
 	}
 
 	// Execute user command in the service container
-	return execIntoContainer(dockerClient, containerID, devConfig.RemoteUser, workingDir, config.Command, devConfig.ShouldOverrideCommand())
+	return execIntoContainer(dockerClient, containerID, devConfig.RemoteUser, workingDir, config.Command, devConfig.ShouldOverrideCommand(), devConfig.ShutdownAction, absoluteComposeFiles, mountPath)
 }
 
 func containerIsRunning(dockerClient *docker.Client, name string) (bool, error) {

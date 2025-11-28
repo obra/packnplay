@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -3876,4 +3877,200 @@ CMD echo "container-cmd-ran" > /tmp/cmd-marker.txt`,
 	// Verify container CMD did NOT run
 	_, err = execInContainer(t, containerName, []string{"cat", "/tmp/cmd-marker.txt"})
 	require.Error(t, err, "Marker file should NOT exist - default behavior overrides CMD")
+}
+
+// TestE2E_ShutdownAction_StopContainer tests that shutdownAction: "stopContainer" stops the container on exit
+func TestE2E_ShutdownAction_StopContainer(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"shutdownAction": "stopContainer"
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+
+	// Start packnplay with a long-running command in the background
+	binary := getPacknplayBinary(t)
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, binary, "run", "--no-worktree", "sleep", "300")
+	cmd.Dir = projectDir
+
+	// Start the command
+	err := cmd.Start()
+	require.NoError(t, err, "Failed to start packnplay")
+
+	// Give it time to create container
+	time.Sleep(2 * time.Second)
+
+	// Verify container is running
+	containerID := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID, "Container should exist")
+	defer cleanupMetadata(t, containerID)
+
+	isRunning, err := containerIsRunningByName(t, containerName)
+	require.NoError(t, err)
+	require.True(t, isRunning, "Container should be running before signal")
+
+	// Send SIGTERM to packnplay process
+	err = cmd.Process.Signal(syscall.SIGTERM)
+	require.NoError(t, err, "Failed to send SIGTERM")
+
+	// Wait for process to exit
+	waitCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- cmd.Wait()
+	}()
+
+	select {
+	case <-waitCtx.Done():
+		t.Fatal("Process did not exit after SIGTERM")
+	case <-waitDone:
+		// Process exited
+	}
+
+	// Give Docker a moment to process the stop
+	time.Sleep(1 * time.Second)
+
+	// Verify container was stopped (not running)
+	isRunning, err = containerIsRunningByName(t, containerName)
+	require.NoError(t, err)
+	require.False(t, isRunning, "Container should be stopped after shutdownAction")
+}
+
+// TestE2E_ShutdownAction_None tests that shutdownAction: "none" (default) leaves container running
+func TestE2E_ShutdownAction_None(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+			"image": "alpine:latest",
+			"shutdownAction": "none"
+		}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+
+	// Run a quick command that creates a marker and exits
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "touch", "/tmp/marker")
+	require.NoError(t, err, "Failed to run: %s", output)
+
+	// Verify container is running after command exits
+	containerID := getContainerIDByName(t, containerName)
+	require.NotEmpty(t, containerID, "Container should exist")
+	defer cleanupMetadata(t, containerID)
+
+	isRunning, err := containerIsRunningByName(t, containerName)
+	require.NoError(t, err)
+	require.True(t, isRunning, "Container should still be running with shutdownAction: none")
+}
+
+// TestE2E_ShutdownAction_StopCompose tests that shutdownAction: "stopCompose" stops compose services on exit
+func TestE2E_ShutdownAction_StopCompose(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		"docker-compose.yml": `version: '3.8'
+services:
+  app:
+    image: alpine:latest
+    command: sleep infinity
+    working_dir: /workspace
+`,
+		".devcontainer/devcontainer.json": `{
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose"
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	// Clean up compose stack on exit (in case test fails)
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		downCmd := exec.CommandContext(ctx, "docker", "compose", "-f", filepath.Join(projectDir, "docker-compose.yml"), "down", "-v")
+		downCmd.Dir = projectDir
+		_ = downCmd.Run()
+	}()
+
+	// Start packnplay with a long-running command in the background
+	binary := getPacknplayBinary(t)
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, binary, "run", "--no-worktree", "sleep", "300")
+	cmd.Dir = projectDir
+
+	// Start the command
+	err := cmd.Start()
+	require.NoError(t, err, "Failed to start packnplay")
+
+	// Give it time to start compose services
+	time.Sleep(3 * time.Second)
+
+	// Verify compose service is running
+	psCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	psCmd := exec.CommandContext(psCtx, "docker", "compose", "-f", filepath.Join(projectDir, "docker-compose.yml"), "ps", "-q")
+	psCmd.Dir = projectDir
+	psOutput, err := psCmd.Output()
+	require.NoError(t, err, "Failed to check compose status")
+	require.NotEmpty(t, strings.TrimSpace(string(psOutput)), "Compose services should be running")
+
+	// Send SIGTERM to packnplay process
+	err = cmd.Process.Signal(syscall.SIGTERM)
+	require.NoError(t, err, "Failed to send SIGTERM")
+
+	// Wait for process to exit
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer waitCancel()
+
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- cmd.Wait()
+	}()
+
+	select {
+	case <-waitCtx.Done():
+		t.Fatal("Process did not exit after SIGTERM")
+	case <-waitDone:
+		// Process exited
+	}
+
+	// Give Docker Compose a moment to process the down
+	time.Sleep(2 * time.Second)
+
+	// Verify compose services were stopped
+	psCtx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel2()
+	psCmd2 := exec.CommandContext(psCtx2, "docker", "compose", "-f", filepath.Join(projectDir, "docker-compose.yml"), "ps", "-q")
+	psCmd2.Dir = projectDir
+	psOutput2, err := psCmd2.Output()
+	require.NoError(t, err, "Failed to check compose status after shutdown")
+	require.Empty(t, strings.TrimSpace(string(psOutput2)), "Compose services should be stopped after shutdownAction")
+}
+
+// containerIsRunningByName checks if a container with the given name is in running state
+func containerIsRunningByName(t *testing.T, containerName string) (bool, error) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "docker", "inspect", "--format", "{{.State.Running}}", containerName)
+	output, err := cmd.Output()
+	if err != nil {
+		return false, fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	return strings.TrimSpace(string(output)) == "true", nil
 }
