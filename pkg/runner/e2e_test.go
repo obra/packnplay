@@ -3570,3 +3570,34 @@ services:
 
 	t.Log("Docker Compose + features incompatibility test completed successfully")
 }
+
+// TestE2E_HostRequirements_Warning verifies that host requirements validation
+// shows warnings but allows container to run (advisory only)
+func TestE2E_HostRequirements_Warning(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+  "image": "alpine:latest",
+  "hostRequirements": {
+    "cpus": 999
+  }
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run should show warning but still work
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "works")
+	require.NoError(t, err, "Should continue despite unmet requirements")
+	require.Contains(t, output, "Host requirements not met", "Should warn about requirements")
+	require.Contains(t, output, "works", "Container should still run despite warnings")
+}

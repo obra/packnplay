@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -561,6 +562,11 @@ func Run(config *RunConfig) error {
 
 	// Note: Credentials are now managed by separate per-container files and watcher daemon
 	// No need for Keychain extraction during container startup
+
+	// Validate host requirements (advisory only - shows warnings but allows container to run)
+	if devConfig.HostRequirements != nil {
+		validateHostRequirements(devConfig.HostRequirements, config.Verbose)
+	}
 
 	// Build docker run command for background container
 	// Apple Container doesn't support -it with -d (detached mode)
@@ -2132,4 +2138,33 @@ func executeHostCommandsParallel(commands map[string]interface{}, workDir string
 		errMsg += fmt.Sprintf("\n  - %s", err.Error())
 	}
 	return fmt.Errorf("%s", errMsg)
+}
+
+// validateHostRequirements checks if the host meets minimum requirements
+// This is advisory only - warnings are shown but container execution continues
+func validateHostRequirements(reqs *devcontainer.HostRequirements, verbose bool) {
+	var warnings []string
+
+	// Check CPU count
+	if reqs.Cpus != nil {
+		cpuCount := runtime.NumCPU()
+		if cpuCount < *reqs.Cpus {
+			warnings = append(warnings, fmt.Sprintf("requires %d CPUs, have %d", *reqs.Cpus, cpuCount))
+		}
+	}
+
+	// Memory and Storage validation would require OS-specific syscalls
+	// For now, we only validate CPU count which is cross-platform via runtime.NumCPU()
+	// Future: Could add memory check using syscall or third-party libraries
+
+	// GPU validation would require checking for nvidia-smi or similar
+	// This is complex and platform-specific, so skipping for now
+
+	if len(warnings) > 0 {
+		fmt.Fprintf(os.Stderr, "⚠️  Host requirements not met: %s\n", strings.Join(warnings, "; "))
+		fmt.Fprintf(os.Stderr, "⚠️  Container may not perform optimally\n")
+		if verbose {
+			fmt.Fprintf(os.Stderr, "Note: This is advisory only - container will still run\n")
+		}
+	}
 }

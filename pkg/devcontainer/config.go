@@ -26,6 +26,14 @@ type PortAttributes struct {
 	OnAutoForward string `json:"onAutoForward,omitempty"` // notify, openBrowser, openBrowserOnce, openPreview, silent, ignore
 }
 
+// HostRequirements represents minimum host system requirements (advisory only)
+type HostRequirements struct {
+	Cpus    *int    `json:"cpus,omitempty"`    // Minimum CPU cores
+	Memory  *string `json:"memory,omitempty"`  // Minimum RAM (e.g., "8gb")
+	Storage *string `json:"storage,omitempty"` // Minimum disk space (e.g., "32gb")
+	Gpu     *bool   `json:"gpu,omitempty"`     // Requires GPU
+}
+
 // Config represents a parsed devcontainer.json
 type Config struct {
 	// Basic container configuration
@@ -61,6 +69,9 @@ type Config struct {
 
 	// Lifecycle control
 	WaitFor string `json:"waitFor,omitempty"` // Which lifecycle command to wait for before setup is complete
+
+	// Host requirements (advisory validation only)
+	HostRequirements *HostRequirements `json:"hostRequirements,omitempty"`
 }
 
 // LoadConfig loads and parses .devcontainer/devcontainer.json if it exists
