@@ -10,6 +10,40 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestOverrideFeatureInstallOrderJSONParsing(t *testing.T) {
+	// Test that overrideFeatureInstallOrder can be parsed from JSON
+	jsonData := `{
+		"image": "ubuntu:22.04",
+		"features": {
+			"feature-a": {},
+			"feature-b": {},
+			"feature-c": {}
+		},
+		"overrideFeatureInstallOrder": ["feature-c", "feature-a", "feature-b"]
+	}`
+
+	var config Config
+	err := json.Unmarshal([]byte(jsonData), &config)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal config: %v", err)
+	}
+
+	if config.OverrideFeatureInstallOrder == nil {
+		t.Fatal("Expected OverrideFeatureInstallOrder to be set, got nil")
+	}
+
+	expectedOrder := []string{"feature-c", "feature-a", "feature-b"}
+	if len(config.OverrideFeatureInstallOrder) != len(expectedOrder) {
+		t.Fatalf("Expected %d features in override order, got %d", len(expectedOrder), len(config.OverrideFeatureInstallOrder))
+	}
+
+	for i, expected := range expectedOrder {
+		if config.OverrideFeatureInstallOrder[i] != expected {
+			t.Errorf("Expected feature %d to be '%s', got '%s'", i, expected, config.OverrideFeatureInstallOrder[i])
+		}
+	}
+}
+
 func TestLoadConfig(t *testing.T) {
 	// Create temp dir with devcontainer.json
 	tmpDir := t.TempDir()
@@ -581,4 +615,90 @@ func TestConfig_SecurityProperties(t *testing.T) {
 
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+func TestConfig_WorkspaceMount(t *testing.T) {
+	tests := []struct {
+		name               string
+		json               string
+		wantWorkspaceMount string
+		wantWorkspaceFolder string
+		wantError          bool
+	}{
+		{
+			name: "workspaceMount with workspaceFolder",
+			json: `{
+				"image": "alpine:latest",
+				"workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+				"workspaceFolder": "/workspace"
+			}`,
+			wantWorkspaceMount: "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+			wantWorkspaceFolder: "/workspace",
+			wantError:          false,
+		},
+		{
+			name: "workspaceMount without workspaceFolder",
+			json: `{
+				"image": "alpine:latest",
+				"workspaceMount": "source=${localWorkspaceFolder},target=/app,type=bind"
+			}`,
+			wantWorkspaceMount: "source=${localWorkspaceFolder},target=/app,type=bind",
+			wantWorkspaceFolder: "",
+			wantError:          false,
+		},
+		{
+			name: "no workspaceMount",
+			json: `{
+				"image": "alpine:latest"
+			}`,
+			wantWorkspaceMount: "",
+			wantWorkspaceFolder: "",
+			wantError:          false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var config Config
+			err := json.Unmarshal([]byte(tt.json), &config)
+
+			if tt.wantError {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantWorkspaceMount, config.WorkspaceMount)
+			assert.Equal(t, tt.wantWorkspaceFolder, config.WorkspaceFolder)
+		})
+	}
+}
+
+func TestConfig_WorkspaceMount_Integration(t *testing.T) {
+	// Create temp dir with devcontainer.json containing workspaceMount
+	tmpDir := t.TempDir()
+	devcontainerDir := filepath.Join(tmpDir, ".devcontainer")
+	require.NoError(t, os.Mkdir(devcontainerDir, 0755))
+
+	configContent := `{
+		"image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+		"workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+		"workspaceFolder": "/workspace",
+		"remoteUser": "vscode"
+	}`
+
+	require.NoError(t, os.WriteFile(
+		filepath.Join(devcontainerDir, "devcontainer.json"),
+		[]byte(configContent),
+		0644,
+	))
+
+	config, err := LoadConfig(tmpDir)
+	require.NoError(t, err)
+	require.NotNil(t, config)
+
+	assert.Equal(t, "mcr.microsoft.com/devcontainers/base:ubuntu", config.Image)
+	assert.Equal(t, "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached", config.WorkspaceMount)
+	assert.Equal(t, "/workspace", config.WorkspaceFolder)
+	assert.Equal(t, "vscode", config.RemoteUser)
 }

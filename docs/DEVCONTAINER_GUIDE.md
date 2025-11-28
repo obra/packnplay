@@ -454,6 +454,51 @@ If you encounter authentication issues, ensure you've logged in to the registry:
 docker login <registry-url>
 ```
 
+#### `overrideFeatureInstallOrder`
+
+Override the automatic dependency-based installation order for features. This allows manual control of feature installation sequence, bypassing dependency resolution.
+
+**Usage:**
+```json
+{
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {},
+    "ghcr.io/devcontainers/features/node:1": {},
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "overrideFeatureInstallOrder": [
+    "ghcr.io/devcontainers/features/docker-in-docker:2",
+    "ghcr.io/devcontainers/features/common-utils:2",
+    "ghcr.io/devcontainers/features/node:1"
+  ]
+}
+```
+
+**Behavior:**
+- If specified, features are installed in the exact order listed
+- Features not in the override list are installed after specified features
+- If not specified or empty, uses automatic dependency resolution based on `dependsOn` and `installsAfter` metadata
+- Warning is printed if the override order doesn't include all features
+
+**Use Cases:**
+- Working around feature dependency issues
+- Optimizing build time by reordering features
+- Testing different installation sequences
+- Forcing specific installation order when automatic resolution is incorrect
+
+**Example with Partial Order:**
+```json
+{
+  "features": {
+    "feature-a": {},
+    "feature-b": {},
+    "feature-c": {}
+  },
+  "overrideFeatureInstallOrder": ["feature-c", "feature-a"]
+}
+```
+Result: `feature-c` → `feature-a` → `feature-b` (feature-b appended at end)
+
 #### Feature Options Processing
 
 Packnplay fully supports the devcontainer features specification for option processing. Feature options are automatically converted to environment variables that the feature's install script can use.

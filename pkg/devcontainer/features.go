@@ -401,6 +401,75 @@ func (r *FeatureResolver) ResolveFeature(featurePath string, options map[string]
 	return resolved, nil
 }
 
+// ResolveFeaturesWithOverride resolves features with optional manual ordering override
+// If overrideOrder is nil or empty, uses dependency-based resolution
+// If overrideOrder is provided, uses that order for specified features, then appends remaining features
+// Prints warnings to stderr if override order doesn't include all features
+func (r *FeatureResolver) ResolveFeaturesWithOverride(features map[string]*ResolvedFeature, overrideOrder []string) ([]*ResolvedFeature, error) {
+	// If no override specified, use normal dependency resolution
+	if len(overrideOrder) == 0 {
+		return r.ResolveFeatures(features)
+	}
+
+	// Load metadata for all features (needed for validation)
+	for id, feature := range features {
+		if feature.Metadata == nil {
+			metadataPath := filepath.Join(feature.InstallPath, "devcontainer-feature.json")
+			metadataBytes, err := os.ReadFile(metadataPath)
+
+			var metadata FeatureMetadata
+			if err == nil {
+				if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+					return nil, fmt.Errorf("failed to parse metadata for feature %s: %w", id, err)
+				}
+			} else if os.IsNotExist(err) {
+				metadata = FeatureMetadata{
+					ID:      id,
+					Version: "1.0.0",
+				}
+			} else {
+				return nil, fmt.Errorf("failed to read metadata for feature %s: %w", id, err)
+			}
+			feature.Metadata = &metadata
+		}
+	}
+
+	// Build result using override order
+	var result []*ResolvedFeature
+	used := make(map[string]bool)
+
+	// First, add features in override order
+	for _, featureID := range overrideOrder {
+		if feature, exists := features[featureID]; exists {
+			result = append(result, feature)
+			used[featureID] = true
+		}
+	}
+
+	// Check if any features are missing from override order
+	var missing []string
+	for id := range features {
+		if !used[id] {
+			missing = append(missing, id)
+		}
+	}
+
+	// Warn if override order doesn't include all features
+	if len(missing) > 0 {
+		fmt.Fprintf(os.Stderr, "Warning: overrideFeatureInstallOrder does not include all features. Missing: %v\n", missing)
+		fmt.Fprintf(os.Stderr, "         These features will be installed after the specified order.\n")
+	}
+
+	// Then add any remaining features (in map iteration order)
+	for id, feature := range features {
+		if !used[id] {
+			result = append(result, feature)
+		}
+	}
+
+	return result, nil
+}
+
 // ResolveFeatures resolves feature dependencies and returns features in installation order
 func (r *FeatureResolver) ResolveFeatures(features map[string]*ResolvedFeature) ([]*ResolvedFeature, error) {
 	// Load metadata for all features

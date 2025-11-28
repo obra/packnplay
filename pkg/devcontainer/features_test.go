@@ -746,3 +746,190 @@ func TestPrivateRegistryAuthenticationInheritsDockerCredentials(t *testing.T) {
 	t.Logf("Successfully resolved private feature %s (version %s) using Docker credentials",
 		resolved.ID, resolved.Version)
 }
+
+func TestOverrideFeatureInstallOrder(t *testing.T) {
+	// Create temp directory for test features
+	tmpDir := t.TempDir()
+	cacheDir := filepath.Join(tmpDir, "cache")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatalf("Failed to create cache directory: %v", err)
+	}
+
+	// Create three features: A, B, C
+	// Without override: B, A, C (based on dependencies)
+	// With override: C, A, B
+
+	// Create feature B (no dependencies)
+	featureBPath := filepath.Join(tmpDir, "feature-b")
+	if err := os.MkdirAll(featureBPath, 0755); err != nil {
+		t.Fatalf("Failed to create feature B directory: %v", err)
+	}
+	metadataB := map[string]interface{}{
+		"id":      "feature-b",
+		"version": "1.0.0",
+		"name":    "Feature B",
+	}
+	metadataBJSON, _ := json.Marshal(metadataB)
+	_ = os.WriteFile(filepath.Join(featureBPath, "devcontainer-feature.json"), metadataBJSON, 0644)
+	_ = os.WriteFile(filepath.Join(featureBPath, "install.sh"), []byte("#!/bin/bash\necho 'B'\n"), 0755)
+
+	// Create feature A (depends on feature-b)
+	featureAPath := filepath.Join(tmpDir, "feature-a")
+	if err := os.MkdirAll(featureAPath, 0755); err != nil {
+		t.Fatalf("Failed to create feature A directory: %v", err)
+	}
+	metadataA := map[string]interface{}{
+		"id":        "feature-a",
+		"version":   "1.0.0",
+		"name":      "Feature A",
+		"dependsOn": map[string]interface{}{"feature-b": map[string]interface{}{}},
+	}
+	metadataAJSON, _ := json.Marshal(metadataA)
+	_ = os.WriteFile(filepath.Join(featureAPath, "devcontainer-feature.json"), metadataAJSON, 0644)
+	_ = os.WriteFile(filepath.Join(featureAPath, "install.sh"), []byte("#!/bin/bash\necho 'A'\n"), 0755)
+
+	// Create feature C (installs after feature-a)
+	featureCPath := filepath.Join(tmpDir, "feature-c")
+	if err := os.MkdirAll(featureCPath, 0755); err != nil {
+		t.Fatalf("Failed to create feature C directory: %v", err)
+	}
+	metadataC := map[string]interface{}{
+		"id":            "feature-c",
+		"version":       "1.0.0",
+		"name":          "Feature C",
+		"installsAfter": []string{"feature-a"},
+	}
+	metadataCJSON, _ := json.Marshal(metadataC)
+	_ = os.WriteFile(filepath.Join(featureCPath, "devcontainer-feature.json"), metadataCJSON, 0644)
+	_ = os.WriteFile(filepath.Join(featureCPath, "install.sh"), []byte("#!/bin/bash\necho 'C'\n"), 0755)
+
+	// Create resolver and resolve features
+	resolver := NewFeatureResolver(cacheDir, nil)
+	features := map[string]*ResolvedFeature{
+		"feature-a": {ID: "feature-a", InstallPath: featureAPath},
+		"feature-b": {ID: "feature-b", InstallPath: featureBPath},
+		"feature-c": {ID: "feature-c", InstallPath: featureCPath},
+	}
+
+	t.Run("manual order overrides dependency order", func(t *testing.T) {
+		// Specify manual order: C, A, B (ignores dependencies)
+		overrideOrder := []string{"feature-c", "feature-a", "feature-b"}
+
+		ordered, err := resolver.ResolveFeaturesWithOverride(features, overrideOrder)
+		if err != nil {
+			t.Fatalf("Failed to resolve features with override: %v", err)
+		}
+
+		// Assert order is exactly as specified
+		expectedOrder := []string{"feature-c", "feature-a", "feature-b"}
+		if len(ordered) != len(expectedOrder) {
+			t.Fatalf("Expected %d features, got %d", len(expectedOrder), len(ordered))
+		}
+
+		for i, expected := range expectedOrder {
+			if ordered[i].ID != expected {
+				t.Errorf("Expected feature %d to be '%s', got '%s'", i, expected, ordered[i].ID)
+			}
+		}
+	})
+
+	t.Run("partial override order", func(t *testing.T) {
+		// Only specify some features - others should still be included
+		overrideOrder := []string{"feature-c", "feature-a"}
+
+		ordered, err := resolver.ResolveFeaturesWithOverride(features, overrideOrder)
+		if err != nil {
+			t.Fatalf("Failed to resolve features with partial override: %v", err)
+		}
+
+		// Should have all 3 features, with C and A first, then B
+		if len(ordered) != 3 {
+			t.Fatalf("Expected 3 features, got %d", len(ordered))
+		}
+
+		if ordered[0].ID != "feature-c" {
+			t.Errorf("Expected first feature to be 'feature-c', got '%s'", ordered[0].ID)
+		}
+		if ordered[1].ID != "feature-a" {
+			t.Errorf("Expected second feature to be 'feature-a', got '%s'", ordered[1].ID)
+		}
+		if ordered[2].ID != "feature-b" {
+			t.Errorf("Expected third feature to be 'feature-b', got '%s'", ordered[2].ID)
+		}
+	})
+
+	t.Run("nil override uses dependency order", func(t *testing.T) {
+		ordered, err := resolver.ResolveFeaturesWithOverride(features, nil)
+		if err != nil {
+			t.Fatalf("Failed to resolve features without override: %v", err)
+		}
+
+		// Should use normal dependency order: B, A, C
+		expectedOrder := []string{"feature-b", "feature-a", "feature-c"}
+		if len(ordered) != len(expectedOrder) {
+			t.Fatalf("Expected %d features, got %d", len(expectedOrder), len(ordered))
+		}
+
+		for i, expected := range expectedOrder {
+			if ordered[i].ID != expected {
+				t.Errorf("Expected feature %d to be '%s', got '%s'", i, expected, ordered[i].ID)
+			}
+		}
+	})
+
+	t.Run("empty override uses dependency order", func(t *testing.T) {
+		ordered, err := resolver.ResolveFeaturesWithOverride(features, []string{})
+		if err != nil {
+			t.Fatalf("Failed to resolve features with empty override: %v", err)
+		}
+
+		// Should use normal dependency order: B, A, C
+		expectedOrder := []string{"feature-b", "feature-a", "feature-c"}
+		if len(ordered) != len(expectedOrder) {
+			t.Fatalf("Expected %d features, got %d", len(expectedOrder), len(ordered))
+		}
+
+		for i, expected := range expectedOrder {
+			if ordered[i].ID != expected {
+				t.Errorf("Expected feature %d to be '%s', got '%s'", i, expected, ordered[i].ID)
+			}
+		}
+	})
+
+	t.Run("warning for partial override order", func(t *testing.T) {
+		// This test verifies that warnings are printed to stderr
+		// We can't easily capture stderr in a unit test, but we can verify
+		// that the function completes successfully
+		overrideOrder := []string{"feature-a"}
+
+		ordered, err := resolver.ResolveFeaturesWithOverride(features, overrideOrder)
+		if err != nil {
+			t.Fatalf("Failed to resolve features with partial override: %v", err)
+		}
+
+		// Should have all 3 features
+		if len(ordered) != 3 {
+			t.Fatalf("Expected 3 features, got %d", len(ordered))
+		}
+
+		// First feature should be the one in override order
+		if ordered[0].ID != "feature-a" {
+			t.Errorf("Expected first feature to be 'feature-a', got '%s'", ordered[0].ID)
+		}
+
+		// Remaining two features should be present (order may vary due to map iteration)
+		foundB := false
+		foundC := false
+		for i := 1; i < len(ordered); i++ {
+			if ordered[i].ID == "feature-b" {
+				foundB = true
+			}
+			if ordered[i].ID == "feature-c" {
+				foundC = true
+			}
+		}
+		if !foundB || !foundC {
+			t.Errorf("Expected to find both feature-b and feature-c in remaining features")
+		}
+	})
+}

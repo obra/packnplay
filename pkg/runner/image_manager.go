@@ -225,8 +225,8 @@ func (im *ImageManager) buildWithFeaturesAndLockfile(devConfig *devcontainer.Con
 		resolvedFeatures[feature.ID] = feature
 	}
 
-	// Resolve dependencies
-	orderedFeatures, err := resolver.ResolveFeatures(resolvedFeatures)
+	// Resolve dependencies (using override order if specified)
+	orderedFeatures, err := resolver.ResolveFeaturesWithOverride(resolvedFeatures, devConfig.OverrideFeatureInstallOrder)
 	if err != nil {
 		return fmt.Errorf("failed to resolve feature dependencies: %w", err)
 	}

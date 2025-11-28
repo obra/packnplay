@@ -27,20 +27,23 @@ import (
 )
 
 type RunConfig struct {
-	Path           string
-	Worktree       string
-	NoWorktree     bool
-	Env            []string
-	Verbose        bool
-	Runtime        string // docker, podman, or container
-	Reconnect      bool   // Allow reconnecting to existing containers
-	DefaultImage   string // default container image to use
-	Command        []string
-	Credentials    config.Credentials
-	DefaultEnvVars []string // API keys to proxy from host
-	PublishPorts   []string // Port mappings to publish to host
-	HostPath       string   // Host directory path for the container
-	LaunchCommand  string   // Original command line used to launch
+	Path                  string
+	Worktree              string
+	NoWorktree            bool
+	Env                   []string
+	Verbose               bool
+	Runtime               string // docker, podman, or container
+	Reconnect             bool   // Allow reconnecting to existing containers
+	DefaultImage          string // default container image to use
+	Command               []string
+	Credentials           config.Credentials
+	DefaultEnvVars        []string // API keys to proxy from host
+	PublishPorts          []string // Port mappings to publish to host
+	HostPath              string   // Host directory path for the container
+	LaunchCommand         string   // Original command line used to launch
+	WorkspaceMount        string   // Custom workspace mount (Docker --mount syntax)
+	WorkspaceFolder       string   // Container workspace folder path
+	WorkspaceMountContext *devcontainer.SubstituteContext // Context for variable substitution in workspaceMount
 }
 
 // ContainerDetails holds detailed information about a running container
@@ -63,8 +66,9 @@ func NewFeaturePropertiesApplier() *FeaturePropertiesApplier {
 
 // ApplyFeatureProperties applies feature container properties to Docker args and environment
 // ctx parameter added for variable substitution in mount strings
-// Returns enhanced args, enhanced env, and any entrypoint args that should be prepended to the command
-func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, features []*devcontainer.ResolvedFeature, baseEnv map[string]string, ctx *devcontainer.SubstituteContext) ([]string, map[string]string, []string) {
+// entrypointSet/entrypointSource track if entrypoint was already set (by config or previous feature)
+// Returns enhanced args, enhanced env, any entrypoint args, and updated entrypoint tracking flags
+func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, features []*devcontainer.ResolvedFeature, baseEnv map[string]string, ctx *devcontainer.SubstituteContext, entrypointSet bool, entrypointSource string) ([]string, map[string]string, []string, bool, string) {
 	enhancedArgs := make([]string, len(baseArgs))
 	copy(enhancedArgs, baseArgs)
 
@@ -74,8 +78,6 @@ func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, fea
 	}
 
 	var entrypointArgs []string
-	var entrypointSet bool
-	var entrypointSource string
 
 	for _, feature := range features {
 		if feature.Metadata == nil {
@@ -137,7 +139,7 @@ func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, fea
 		}
 	}
 
-	return enhancedArgs, enhancedEnv, entrypointArgs
+	return enhancedArgs, enhancedEnv, entrypointArgs, entrypointSet, entrypointSource
 }
 
 // getTTYFlags returns appropriate TTY flags for docker commands
@@ -765,8 +767,40 @@ func Run(config *RunConfig) error {
 	// Ensure parent directory exists in container by creating it on first run
 	// We'll create it after container starts but before exec
 
-	// Mount workspace at host path (preserving absolute paths)
-	args = append(args, "-v", fmt.Sprintf("%s:%s", mountPath, mountPath))
+	// Mount workspace - use workspaceMount if specified, otherwise default -v
+	if devConfig.WorkspaceMount != "" {
+		// Validate that workspaceFolder is also set (Microsoft spec requirement)
+		if devConfig.WorkspaceFolder == "" {
+			return fmt.Errorf("workspaceMount requires workspaceFolder to be set")
+		}
+
+		// Create substitution context for variable resolution
+		containerWorkspaceFolder := devConfig.WorkspaceFolder
+		if containerWorkspaceFolder == "" {
+			containerWorkspaceFolder = mountPath
+		}
+
+		ctx := &devcontainer.SubstituteContext{
+			LocalWorkspaceFolder:     mountPath,
+			ContainerWorkspaceFolder: containerWorkspaceFolder,
+			LocalEnv:                 getLocalEnvMap(),
+			ContainerEnv:             make(map[string]string),
+			Labels:                   labels,
+		}
+
+		// Perform variable substitution on workspaceMount
+		substituted := devcontainer.Substitute(ctx, devConfig.WorkspaceMount)
+		mountSpec, ok := substituted.(string)
+		if !ok {
+			return fmt.Errorf("workspaceMount substitution did not produce a string")
+		}
+
+		// Use Docker --mount syntax
+		args = append(args, "--mount", mountSpec)
+	} else {
+		// Default behavior: mount workspace at host path (preserving absolute paths)
+		args = append(args, "-v", fmt.Sprintf("%s:%s", mountPath, mountPath))
+	}
 
 	// Mount AI agent config directories using MountBuilder (replaces hardcoded list)
 	mountBuilder := NewMountBuilder(homeDir, devConfig.RemoteUser)
@@ -1184,8 +1218,9 @@ func Run(config *RunConfig) error {
 			currentEnv := make(map[string]string)
 
 			// Apply feature properties with variable substitution
+			// Pass entrypoint tracking so features can warn if they override config entrypoint
 			var enhancedEnv map[string]string
-			args, enhancedEnv, entrypointArgs = applier.ApplyFeatureProperties(args, resolvedFeatures, currentEnv, ctx)
+			args, enhancedEnv, entrypointArgs, entrypointSet, entrypointSource = applier.ApplyFeatureProperties(args, resolvedFeatures, currentEnv, ctx, entrypointSet, entrypointSource)
 
 			// Add feature-contributed environment variables to docker args
 			// These go after devcontainer env but can still be overridden by user --env flags

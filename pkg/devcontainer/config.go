@@ -48,13 +48,15 @@ type Config struct {
 	RemoteUser      string                    `json:"remoteUser"`              // User for remote operations (docker exec --user)
 	UpdateRemoteUserUID bool                  `json:"updateRemoteUserUID,omitempty"` // Sync container user UID/GID to match host (Linux only)
 	UserEnvProbe    string                    `json:"userEnvProbe,omitempty"`  // Shell type for environment probing: none, loginShell, interactiveShell, loginInteractiveShell
-	ContainerEnv    map[string]string         `json:"containerEnv,omitempty"`
-	RemoteEnv       map[string]string         `json:"remoteEnv,omitempty"`
-	ForwardPorts    []interface{}             `json:"forwardPorts,omitempty"`    // int or string
-	PortsAttributes map[string]PortAttributes `json:"portsAttributes,omitempty"` // Port-specific metadata
-	Mounts          []string                  `json:"mounts,omitempty"`          // Docker mount syntax
-	RunArgs         []string                  `json:"runArgs,omitempty"`         // Additional docker run arguments
-	Features        map[string]interface{}    `json:"features,omitempty"`
+	ContainerEnv         map[string]string         `json:"containerEnv,omitempty"`
+	RemoteEnv            map[string]string         `json:"remoteEnv,omitempty"`
+	ForwardPorts         []interface{}             `json:"forwardPorts,omitempty"`         // int or string
+	PortsAttributes      map[string]PortAttributes `json:"portsAttributes,omitempty"`      // Port-specific metadata
+	OtherPortsAttributes PortAttributes            `json:"otherPortsAttributes,omitempty"` // Default attributes for ports not in portsAttributes
+	Mounts               []string                  `json:"mounts,omitempty"`               // Docker mount syntax
+	RunArgs                     []string               `json:"runArgs,omitempty"`                     // Additional docker run arguments
+	Features                    map[string]interface{} `json:"features,omitempty"`
+	OverrideFeatureInstallOrder []string               `json:"overrideFeatureInstallOrder,omitempty"` // Manual feature installation order (overrides dependency resolution)
 
 	// Security properties - can be set directly in devcontainer.json or via features
 	Privileged   *bool    `json:"privileged,omitempty"`   // Run container in privileged mode
@@ -101,13 +103,15 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 		RemoteUser          string                    `json:"remoteUser"`
 		UpdateRemoteUserUID bool                      `json:"updateRemoteUserUID,omitempty"`
 		UserEnvProbe        string                    `json:"userEnvProbe,omitempty"`
-		ContainerEnv        map[string]string         `json:"containerEnv,omitempty"`
-		RemoteEnv           map[string]string         `json:"remoteEnv,omitempty"`
-		ForwardPorts        []interface{}             `json:"forwardPorts,omitempty"`
-		PortsAttributes     map[string]PortAttributes `json:"portsAttributes,omitempty"`
-		Mounts              []string                  `json:"mounts,omitempty"`
-		RunArgs             []string                  `json:"runArgs,omitempty"`
-		Features            map[string]interface{}    `json:"features,omitempty"`
+		ContainerEnv         map[string]string         `json:"containerEnv,omitempty"`
+		RemoteEnv            map[string]string         `json:"remoteEnv,omitempty"`
+		ForwardPorts         []interface{}             `json:"forwardPorts,omitempty"`
+		PortsAttributes      map[string]PortAttributes `json:"portsAttributes,omitempty"`
+		OtherPortsAttributes PortAttributes            `json:"otherPortsAttributes,omitempty"`
+		Mounts               []string                  `json:"mounts,omitempty"`
+		RunArgs                     []string               `json:"runArgs,omitempty"`
+		Features                    map[string]interface{} `json:"features,omitempty"`
+		OverrideFeatureInstallOrder []string               `json:"overrideFeatureInstallOrder,omitempty"`
 		Privileged          *bool                     `json:"privileged,omitempty"`
 		Init                *bool                     `json:"init,omitempty"`
 		CapAdd              []string                  `json:"capAdd,omitempty"`
@@ -147,9 +151,11 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	c.RemoteEnv = aux.RemoteEnv
 	c.ForwardPorts = aux.ForwardPorts
 	c.PortsAttributes = aux.PortsAttributes
+	c.OtherPortsAttributes = aux.OtherPortsAttributes
 	c.Mounts = aux.Mounts
 	c.RunArgs = aux.RunArgs
 	c.Features = aux.Features
+	c.OverrideFeatureInstallOrder = aux.OverrideFeatureInstallOrder
 	c.Privileged = aux.Privileged
 	c.Init = aux.Init
 	c.CapAdd = aux.CapAdd
@@ -345,4 +351,17 @@ func LoadLockFile(projectPath string) (*LockFile, error) {
 	}
 
 	return &lockfile, nil
+}
+
+// GetPortAttributes returns the port attributes for a given port
+// If the port is explicitly defined in portsAttributes, returns those attributes
+// Otherwise, returns otherPortsAttributes (which may be empty)
+func (c *Config) GetPortAttributes(port string) PortAttributes {
+	// Check if this port has explicit attributes
+	if attrs, exists := c.PortsAttributes[port]; exists {
+		return attrs
+	}
+
+	// Return otherPortsAttributes as default
+	return c.OtherPortsAttributes
 }

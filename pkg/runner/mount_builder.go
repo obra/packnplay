@@ -6,6 +6,7 @@ import (
 
 	"github.com/obra/packnplay/pkg/agents"
 	"github.com/obra/packnplay/pkg/config"
+	"github.com/obra/packnplay/pkg/devcontainer"
 )
 
 // MountBuilder constructs volume mount arguments for containers.
@@ -31,16 +32,38 @@ func NewMountBuilder(hostHomeDir, containerUser string) *MountBuilder {
 // Extracted from runner.Run() lines 345-426 to improve testability and maintainability.
 //
 // Mount order:
-//  1. Project directory (read-write)
+//  1. Project directory (read-write) - uses workspaceMount if specified, otherwise default -v
 //  2. .git directory if exists (read-write)
 //  3. Credentials (git, ssh, gh, gpg, npm, aws) based on config (read-only)
 //  4. AI agent configurations using Agent abstraction (read-write)
 func (mb *MountBuilder) BuildMounts(cfg *RunConfig) ([]string, error) {
 	var args []string
 
-	// 1. Mount project directory
-	projectMount := fmt.Sprintf("%s:%s", cfg.Path, cfg.Path)
-	args = append(args, "-v", projectMount)
+	// 1. Mount project directory - use workspaceMount if specified
+	if cfg.WorkspaceMount != "" {
+		// Validate that workspaceFolder is also set (Microsoft spec requirement)
+		if cfg.WorkspaceFolder == "" {
+			return nil, fmt.Errorf("workspaceMount requires workspaceFolder to be set")
+		}
+
+		// Perform variable substitution on workspaceMount
+		if cfg.WorkspaceMountContext == nil {
+			return nil, fmt.Errorf("WorkspaceMountContext is required when workspaceMount is set")
+		}
+
+		substituted := devcontainer.Substitute(cfg.WorkspaceMountContext, cfg.WorkspaceMount)
+		mountSpec, ok := substituted.(string)
+		if !ok {
+			return nil, fmt.Errorf("workspaceMount substitution did not produce a string")
+		}
+
+		// Use Docker --mount syntax
+		args = append(args, "--mount", mountSpec)
+	} else {
+		// Default behavior: use -v flag for simple volume mount
+		projectMount := fmt.Sprintf("%s:%s", cfg.Path, cfg.Path)
+		args = append(args, "-v", projectMount)
+	}
 
 	// 2. Mount .git directory (if exists)
 	gitDir := filepath.Join(cfg.Path, ".git")

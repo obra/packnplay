@@ -42,7 +42,7 @@ func TestFeatureMountVariableSubstitution(t *testing.T) {
 		},
 	}
 
-	enhancedArgs, _, _ := applier.ApplyFeatureProperties(dockerArgs, features, map[string]string{}, ctx)
+	enhancedArgs, _, _, _, _ := applier.ApplyFeatureProperties(dockerArgs, features, map[string]string{}, ctx, false, "")
 
 	// Find the mount argument
 	var mountArg string
@@ -97,7 +97,7 @@ func TestMultipleEntrypoints_Warning(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 
-	enhancedArgs, _, _ := applier.ApplyFeatureProperties(dockerArgs, features, map[string]string{}, ctx)
+	enhancedArgs, _, _, _, _ := applier.ApplyFeatureProperties(dockerArgs, features, map[string]string{}, ctx, false, "")
 
 	// Restore stderr and read captured output
 	w.Close()
@@ -153,7 +153,7 @@ func TestSingleEntrypoint_NoWarning(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 
-	enhancedArgs, _, _ := applier.ApplyFeatureProperties(dockerArgs, features, map[string]string{}, ctx)
+	enhancedArgs, _, _, _, _ := applier.ApplyFeatureProperties(dockerArgs, features, map[string]string{}, ctx, false, "")
 
 	// Restore stderr and read captured output
 	w.Close()
@@ -203,7 +203,7 @@ func TestEmptyStringFiltering_CapAddAndSecurityOpt(t *testing.T) {
 		Labels:                   map[string]string{},
 	}
 
-	enhancedArgs, _, _ := applier.ApplyFeatureProperties(dockerArgs, features, map[string]string{}, ctx)
+	enhancedArgs, _, _, _, _ := applier.ApplyFeatureProperties(dockerArgs, features, map[string]string{}, ctx, false, "")
 
 	// Count cap-add arguments - should only have non-empty values
 	capAddCount := 0
@@ -234,4 +234,120 @@ func TestEmptyStringFiltering_CapAddAndSecurityOpt(t *testing.T) {
 	assert.Contains(t, argsStr, "--security-opt=seccomp=unconfined", "Should contain seccomp security option")
 
 	t.Logf("Enhanced args: %v", enhancedArgs)
+}
+
+// TestConfigSecurityProperties tests that security properties from devcontainer.json are applied
+func TestConfigSecurityProperties(t *testing.T) {
+	// Create temp directory for test
+	tmpDir := t.TempDir()
+
+	// Write a devcontainer.json with all security properties
+	devcontainerJSON := `{
+		"image": "alpine:latest",
+		"privileged": true,
+		"init": true,
+		"capAdd": ["SYS_ADMIN", "NET_ADMIN"],
+		"securityOpt": ["seccomp=unconfined"],
+		"entrypoint": "/bin/sh"
+	}`
+
+	devcontainerDir := tmpDir + "/.devcontainer"
+	err := os.Mkdir(devcontainerDir, 0755)
+	assert.NoError(t, err)
+
+	err = os.WriteFile(devcontainerDir+"/devcontainer.json", []byte(devcontainerJSON), 0644)
+	assert.NoError(t, err)
+
+	// Load the config
+	config, err := devcontainer.LoadConfig(tmpDir)
+	assert.NoError(t, err)
+	assert.NotNil(t, config)
+
+	// Verify fields are loaded correctly
+	assert.NotNil(t, config.Privileged)
+	assert.True(t, *config.Privileged)
+	assert.NotNil(t, config.Init)
+	assert.True(t, *config.Init)
+	assert.Equal(t, []string{"SYS_ADMIN", "NET_ADMIN"}, config.CapAdd)
+	assert.Equal(t, []string{"seccomp=unconfined"}, config.SecurityOpt)
+	assert.Equal(t, []string{"/bin/sh"}, config.Entrypoint)
+}
+
+// TestSecurityPropertiesMergeStrategy tests that config properties are applied before feature properties
+// and that features can override them with appropriate warnings
+func TestSecurityPropertiesMergeStrategy(t *testing.T) {
+	// Simulate config setting privileged=true and entrypoint="/bin/bash"
+	// Then feature tries to override entrypoint to "/bin/sh"
+
+	configEntrypoint := []string{"/bin/bash"}
+
+	featureWithEntrypoint := []*devcontainer.ResolvedFeature{
+		{
+			ID: "override-feature",
+			Metadata: &devcontainer.FeatureMetadata{
+				Entrypoint: []string{"/bin/sh", "-c"},
+			},
+		},
+	}
+
+	applier := NewFeaturePropertiesApplier()
+	dockerArgs := []string{"run", "-d", "--name", "test"}
+
+	// Add config entrypoint first
+	dockerArgs = append(dockerArgs, "--entrypoint="+configEntrypoint[0])
+
+	ctx := &devcontainer.SubstituteContext{
+		LocalWorkspaceFolder:     "/test/workspace",
+		ContainerWorkspaceFolder: "/workspace",
+		LocalEnv:                 map[string]string{},
+		ContainerEnv:             map[string]string{},
+		Labels:                   map[string]string{},
+	}
+
+	// Capture stderr to verify warning is printed
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	// Apply feature properties with entrypoint already set by config
+	enhancedArgs, _, entrypointArgs, entrypointSet, entrypointSource := applier.ApplyFeatureProperties(
+		dockerArgs, featureWithEntrypoint, map[string]string{}, ctx, true, "devcontainer.json")
+
+	// Restore stderr and read captured output
+	w.Close()
+	os.Stderr = oldStderr
+
+	var buf bytes.Buffer
+	_, _ = buf.ReadFrom(r)
+	stderrOutput := buf.String()
+
+	// Verify warning was printed
+	assert.Contains(t, stderrOutput, "Warning: feature 'override-feature' overrides entrypoint from 'devcontainer.json'")
+
+	// Verify feature's entrypoint was added (Docker uses the last --entrypoint flag)
+	argsStr := strings.Join(enhancedArgs, " ")
+	assert.Contains(t, argsStr, "--entrypoint=/bin/sh", "Feature should add its entrypoint")
+
+	// Both entrypoints will be in args, but Docker uses the last one
+	// Count how many --entrypoint flags there are
+	entrypointCount := 0
+	lastEntrypoint := ""
+	for _, arg := range enhancedArgs {
+		if strings.HasPrefix(arg, "--entrypoint=") {
+			entrypointCount++
+			lastEntrypoint = arg
+		}
+	}
+	assert.Equal(t, 2, entrypointCount, "Should have both config and feature entrypoint flags")
+	assert.Equal(t, "--entrypoint=/bin/sh", lastEntrypoint, "Feature's entrypoint should be last (Docker uses last one)")
+
+	// Verify entrypoint tracking is updated
+	assert.True(t, entrypointSet)
+	assert.Equal(t, "override-feature", entrypointSource)
+
+	// Verify entrypoint args from feature
+	assert.Equal(t, []string{"-c"}, entrypointArgs, "Feature entrypoint args should be returned")
+
+	t.Logf("Enhanced args: %v", enhancedArgs)
+	t.Logf("Stderr output: %s", stderrOutput)
 }
