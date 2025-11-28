@@ -1533,6 +1533,43 @@ func TestE2E_CommandChangeDetection(t *testing.T) {
 	require.Contains(t, output2, "version2", "Command should re-execute with new content")
 }
 
+// TestE2E_WaitFor_SynchronousExecution verifies that waitFor is implicitly honored
+// because packnplay executes all lifecycle commands synchronously before running
+// the user command. This test confirms postCreateCommand completes before user exec.
+func TestE2E_WaitFor_SynchronousExecution(t *testing.T) {
+	skipIfNoDocker(t)
+
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/devcontainer.json": `{
+  "image": "alpine:latest",
+  "onCreateCommand": "touch /tmp/onCreate-done",
+  "updateContentCommand": "touch /tmp/updateContent-done",
+  "postCreateCommand": "touch /tmp/postCreate-done",
+  "postStartCommand": "touch /tmp/postStart-done",
+  "waitFor": "postCreateCommand"
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// User command should only run after all lifecycle commands complete
+	// If any lifecycle command has not completed, this test command will fail
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree",
+		"/bin/sh", "-c",
+		"test -f /tmp/onCreate-done && test -f /tmp/updateContent-done && test -f /tmp/postCreate-done && test -f /tmp/postStart-done && echo 'all-lifecycle-commands-completed'")
+
+	require.NoError(t, err, "All lifecycle commands should complete before user command executes (waitFor honored): %s", output)
+	require.Contains(t, output, "all-lifecycle-commands-completed", "User command should only run after waitFor command completes")
+}
+
 // ============================================================================
 // Section 2.8: User Detection Tests
 // ============================================================================

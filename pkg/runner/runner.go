@@ -1113,6 +1113,11 @@ func Run(config *RunConfig) error {
 	// Step 11: Execute lifecycle commands from devcontainer.json
 	// Commands are tracked: onCreate/postCreate run once, postStart always runs
 	// Feature lifecycle commands execute before user commands per specification
+	//
+	// IMPORTANT: All lifecycle commands execute synchronously in order before the user
+	// command runs. This implicitly honors the waitFor property - the container is only
+	// considered ready after all lifecycle commands complete. The waitFor property is
+	// primarily informational for editors that might run commands in the background.
 	hasLifecycleCommands := devConfig.OnCreateCommand != nil || devConfig.UpdateContentCommand != nil || devConfig.PostCreateCommand != nil || devConfig.PostStartCommand != nil
 	hasFeatures := len(devConfig.Features) > 0
 
@@ -1348,6 +1353,7 @@ func runWithCompose(devConfig *devcontainer.Config, config *RunConfig, mountPath
 	}
 
 	// Execute lifecycle commands
+	// All commands run synchronously before user exec, implicitly honoring waitFor
 	hasLifecycleCommands := devConfig.OnCreateCommand != nil ||
 		devConfig.UpdateContentCommand != nil ||
 		devConfig.PostCreateCommand != nil ||
