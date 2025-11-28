@@ -71,7 +71,8 @@ type Config struct {
 	PostAttachCommand    *LifecycleCommand `json:"postAttachCommand,omitempty"`   // Runs every time IDE attaches
 
 	// Lifecycle control
-	WaitFor string `json:"waitFor,omitempty"` // Which lifecycle command to wait for before setup is complete
+	WaitFor         string `json:"waitFor,omitempty"`         // Which lifecycle command to wait for before setup is complete
+	OverrideCommand *bool  `json:"overrideCommand,omitempty"` // Whether to override container CMD with user command (default: true)
 
 	// Host requirements (advisory validation only)
 	HostRequirements *HostRequirements `json:"hostRequirements,omitempty"`
@@ -169,6 +170,15 @@ func (c *Config) GetDockerComposeFiles() []string {
 	default:
 		return nil
 	}
+}
+
+// ShouldOverrideCommand returns whether to override the container's CMD with user command
+// Returns true by default (when OverrideCommand is nil or true)
+func (c *Config) ShouldOverrideCommand() bool {
+	if c.OverrideCommand == nil {
+		return true // default behavior
+	}
+	return *c.OverrideCommand
 }
 
 // GetResolvedEnvironment applies variable substitution and returns resolved environment variables

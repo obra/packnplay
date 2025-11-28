@@ -185,7 +185,7 @@ func executePostStart(dockerClient *docker.Client, containerID string, remoteUse
 }
 
 // execIntoContainer replaces the current process with docker exec into the container
-func execIntoContainer(dockerClient *docker.Client, containerID string, remoteUser string, workingDir string, command []string) error {
+func execIntoContainer(dockerClient *docker.Client, containerID string, remoteUser string, workingDir string, command []string, overrideCommand bool) error {
 	cmdPath, err := exec.LookPath(dockerClient.Command())
 	if err != nil {
 		return fmt.Errorf("failed to find docker command: %w", err)
@@ -200,7 +200,12 @@ func execIntoContainer(dockerClient *docker.Client, containerID string, remoteUs
 	}
 
 	execArgs = append(execArgs, "-w", workingDir, containerID)
-	execArgs = append(execArgs, command...)
+
+	// Only append command if overrideCommand is true
+	// When false, the container's default CMD will run
+	if overrideCommand {
+		execArgs = append(execArgs, command...)
+	}
 
 	// Use syscall.Exec to replace current process
 	return syscall.Exec(cmdPath, execArgs, os.Environ())
@@ -488,7 +493,7 @@ func Run(config *RunConfig) error {
 		}
 
 		// Exec into existing container
-		return execIntoContainer(dockerClient, containerID, devConfig.RemoteUser, reconnectWorkingDir, config.Command)
+		return execIntoContainer(dockerClient, containerID, devConfig.RemoteUser, reconnectWorkingDir, config.Command, devConfig.ShouldOverrideCommand())
 	}
 
 	// Check for stopped container with same name and try to restart it
@@ -540,7 +545,7 @@ func Run(config *RunConfig) error {
 				}
 
 				// Exec into restarted container with user's command
-				return execIntoContainer(dockerClient, containerID, devConfig.RemoteUser, restartWorkingDir, config.Command)
+				return execIntoContainer(dockerClient, containerID, devConfig.RemoteUser, restartWorkingDir, config.Command, devConfig.ShouldOverrideCommand())
 			}
 
 			// Restart failed - log and fall through to recreation
@@ -1441,7 +1446,7 @@ func runWithCompose(devConfig *devcontainer.Config, config *RunConfig, mountPath
 	}
 
 	// Execute user command in the service container
-	return execIntoContainer(dockerClient, containerID, devConfig.RemoteUser, workingDir, config.Command)
+	return execIntoContainer(dockerClient, containerID, devConfig.RemoteUser, workingDir, config.Command, devConfig.ShouldOverrideCommand())
 }
 
 func containerIsRunning(dockerClient *docker.Client, name string) (bool, error) {

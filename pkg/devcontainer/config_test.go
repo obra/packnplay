@@ -362,3 +362,43 @@ func TestLoadLockFile(t *testing.T) {
 		})
 	}
 }
+
+func TestConfig_ShouldOverrideCommand(t *testing.T) {
+	tests := []struct {
+		name           string
+		overrideCmd    *bool
+		expectedResult bool
+	}{
+		{
+			name:           "nil (unset) defaults to true",
+			overrideCmd:    nil,
+			expectedResult: true,
+		},
+		{
+			name: "explicitly true",
+			overrideCmd: func() *bool {
+				v := true
+				return &v
+			}(),
+			expectedResult: true,
+		},
+		{
+			name: "explicitly false",
+			overrideCmd: func() *bool {
+				v := false
+				return &v
+			}(),
+			expectedResult: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				OverrideCommand: tt.overrideCmd,
+			}
+			result := config.ShouldOverrideCommand()
+			assert.Equal(t, tt.expectedResult, result)
+		})
+	}
+}

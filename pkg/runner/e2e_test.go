@@ -3767,3 +3767,113 @@ func TestE2E_UpdateRemoteUserUID_NotOnMacOS(t *testing.T) {
 	require.Contains(t, output, "works", "Container should run normally")
 	// We don't check for a skip message - just verify it doesn't error
 }
+
+// TestE2E_OverrideCommand_False verifies that overrideCommand: false runs container CMD
+func TestE2E_OverrideCommand_False(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create a Dockerfile with a default CMD that creates a marker file
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/Dockerfile": `FROM alpine:latest
+CMD echo "container-cmd-ran" > /tmp/cmd-marker.txt && sleep infinity`,
+		".devcontainer/devcontainer.json": `{
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "overrideCommand": false
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run without providing a user command - container CMD should run
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree")
+	require.NoError(t, err, "Failed to run: %s", output)
+
+	// Wait for CMD to create marker file
+	time.Sleep(2 * time.Second)
+
+	// Verify container CMD ran by checking for marker file
+	catOutput, err := execInContainer(t, containerName, []string{"cat", "/tmp/cmd-marker.txt"})
+	require.NoError(t, err, "Marker file should exist from container CMD")
+	require.Contains(t, catOutput, "container-cmd-ran", "Container CMD should have run")
+}
+
+// TestE2E_OverrideCommand_True verifies that overrideCommand: true (default) overrides CMD
+func TestE2E_OverrideCommand_True(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create a Dockerfile with a default CMD
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/Dockerfile": `FROM alpine:latest
+CMD echo "container-cmd-ran" > /tmp/cmd-marker.txt`,
+		".devcontainer/devcontainer.json": `{
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "overrideCommand": true
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run with user command - should override container CMD
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "user-command-ran")
+	require.NoError(t, err, "Failed to run: %s", output)
+	require.Contains(t, output, "user-command-ran", "User command should run")
+
+	// Verify container CMD did NOT run (marker file should not exist)
+	_, err = execInContainer(t, containerName, []string{"cat", "/tmp/cmd-marker.txt"})
+	require.Error(t, err, "Marker file should NOT exist - container CMD should not have run")
+}
+
+// TestE2E_OverrideCommand_Default verifies default behavior (true) when not specified
+func TestE2E_OverrideCommand_Default(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create a Dockerfile with a default CMD
+	projectDir := createTestProject(t, map[string]string{
+		".devcontainer/Dockerfile": `FROM alpine:latest
+CMD echo "container-cmd-ran" > /tmp/cmd-marker.txt`,
+		".devcontainer/devcontainer.json": `{
+  "build": {
+    "dockerfile": "Dockerfile"
+  }
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	// Run with user command - default should override container CMD
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "default-behavior")
+	require.NoError(t, err, "Failed to run: %s", output)
+	require.Contains(t, output, "default-behavior", "User command should run by default")
+
+	// Verify container CMD did NOT run
+	_, err = execInContainer(t, containerName, []string{"cat", "/tmp/cmd-marker.txt"})
+	require.Error(t, err, "Marker file should NOT exist - default behavior overrides CMD")
+}
