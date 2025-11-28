@@ -270,7 +270,7 @@ Pack 'n Play creates git worktrees in XDG-compliant locations for isolation:
 
 ### Dev Container Support
 
-packnplay achieves **~90% Microsoft devcontainer specification compliance** for image/dockerfile workflows—production-ready support for reproducible development environments with comprehensive feature support.
+packnplay achieves **~95% Microsoft devcontainer specification compliance**—production-ready support for reproducible development environments with comprehensive feature support across image, dockerfile, and Docker Compose workflows.
 
 **Quick Example:**
 ```json
@@ -344,16 +344,12 @@ packnplay achieves **~90% Microsoft devcontainer specification compliance** for 
 - **Signal Handling**: Graceful shutdown with SIGTERM
 - **Feature Integration**: Complete metadata processing
 
-#### **🚧 Known Gaps (~10% of specification)**
+#### **🚧 Known Gaps (~5% of specification)**
 
 **Not Supported:**
-- ❌ Docker Compose orchestration (`dockerComposeFile`, `service`, `runServices`)
 - ❌ Host requirements (`hostRequirements.cpus`, `.memory`, `.storage`, `.gpu`)
 - ❌ Advanced user management (`containerUser`, `updateRemoteUserUID`, `userEnvProbe`)
-- ❌ Lifecycle control properties (`overrideCommand`, `shutdownAction`)
-- ❌ `waitFor` lifecycle timing (defined but not enforced)
-- ❌ `updateContentCommand` execution (merged but not run)
-- ❌ `portsAttributes` application (parsed but not applied to containers)
+- ❌ Lifecycle control properties (`overrideCommand`, `shutdownAction`, `overrideFeatureInstallOrder`)
 - ❌ `customizations` (VS Code-specific, intentionally excluded)
 
 **Recently Implemented:**
