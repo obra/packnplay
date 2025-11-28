@@ -1372,6 +1372,23 @@ func Run(config *RunConfig) error {
 				}
 			}
 		}
+
+		// Validate and log waitFor property
+		// Since we execute synchronously, all commands complete before proceeding.
+		// This validates the property is set correctly and provides transparency.
+		if devConfig.WaitFor != "" {
+			validCommands := map[string]bool{
+				"onCreateCommand":      true,
+				"updateContentCommand": true,
+				"postCreateCommand":    true,
+				"postStartCommand":     true,
+			}
+			if !validCommands[devConfig.WaitFor] {
+				fmt.Fprintf(os.Stderr, "Warning: waitFor value '%s' is not a valid lifecycle command\n", devConfig.WaitFor)
+			} else if config.Verbose {
+				fmt.Fprintf(os.Stderr, "waitFor: %s (completed synchronously)\n", devConfig.WaitFor)
+			}
+		}
 	}
 
 	// Step 12: Exec into container with user's command
