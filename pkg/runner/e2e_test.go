@@ -3489,3 +3489,47 @@ services:
 
 	t.Log("Docker Compose multi-service test completed successfully")
 }
+
+// TestE2E_DockerCompose_FeaturesIncompatibility tests that compose + features is rejected
+func TestE2E_DockerCompose_FeaturesIncompatibility(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create test project with docker-compose.yml AND features (which should error)
+	projectDir := createTestProject(t, map[string]string{
+		"docker-compose.yml": `version: '3.8'
+services:
+  app:
+    image: alpine:latest
+    command: sleep infinity
+    working_dir: /workspace
+`,
+		".devcontainer/devcontainer.json": `{
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {}
+  }
+}`,
+	})
+	defer os.RemoveAll(projectDir)
+
+	// Clean up any compose stack that might have been created
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		downCmd := exec.CommandContext(ctx, "docker", "compose", "-f", filepath.Join(projectDir, "docker-compose.yml"), "down", "-v")
+		downCmd.Dir = projectDir
+		_ = downCmd.Run()
+	}()
+
+	// Run packnplay - should fail with clear error message
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "should-not-run")
+	require.Error(t, err, "Expected error when using compose with features")
+	require.Contains(t, output, "dockerComposeFile does not support devcontainer features",
+		"Expected clear error message about features incompatibility")
+	require.Contains(t, output, "install features in your compose service image instead",
+		"Expected guidance on how to fix the issue")
+
+	t.Log("Docker Compose + features incompatibility test completed successfully")
+}

@@ -321,6 +321,12 @@ func Run(config *RunConfig) error {
 		return fmt.Errorf("dockerComposeFile is mutually exclusive with image/build.dockerfile")
 	}
 
+	// Validate compose + features incompatibility
+	// Features require building a custom image, but compose mode uses pre-built service images
+	if isComposeMode && len(devConfig.Features) > 0 {
+		return fmt.Errorf("dockerComposeFile does not support devcontainer features - install features in your compose service image instead")
+	}
+
 	// Step 4: Initialize container client
 	dockerClient, err := docker.NewClientWithRuntime(config.Runtime, config.Verbose)
 	if err != nil {
@@ -329,6 +335,8 @@ func Run(config *RunConfig) error {
 
 	// Route to Docker Compose workflow if compose mode
 	if isComposeMode {
+		// Note: Compose mode does not load lockfile because features are not supported
+		// in compose mode (compose uses pre-built service images, not custom image builds)
 		return runWithCompose(devConfig, config, mountPath, workDir, worktreeName, dockerClient)
 	}
 
@@ -379,49 +387,8 @@ func Run(config *RunConfig) error {
 
 	// Step 6.5: Execute initializeCommand on HOST if present
 	// This runs BEFORE container creation, on the host machine
-	// Security note: this executes arbitrary commands from devcontainer.json
-	if devConfig.InitializeCommand != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  Running initializeCommand on host (executes code from devcontainer.json)...\n")
-
-		// Handle different command formats (string, array, object)
-		var err error
-		if devConfig.InitializeCommand.IsString() {
-			// String command: execute with shell
-			cmdStr, _ := devConfig.InitializeCommand.AsString()
-			if config.Verbose {
-				fmt.Fprintf(os.Stderr, "Executing: %s\n", cmdStr)
-			}
-			cmd := exec.Command("/bin/sh", "-c", cmdStr)
-			cmd.Dir = mountPath
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			err = cmd.Run()
-		} else if devConfig.InitializeCommand.IsArray() {
-			// Array command: execute directly without shell
-			cmdArray, _ := devConfig.InitializeCommand.AsArray()
-			if len(cmdArray) > 0 {
-				if config.Verbose {
-					fmt.Fprintf(os.Stderr, "Executing: %v\n", cmdArray)
-				}
-				cmd := exec.Command(cmdArray[0], cmdArray[1:]...)
-				cmd.Dir = mountPath
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				err = cmd.Run()
-			}
-		} else if devConfig.InitializeCommand.IsObject() {
-			// Object command: execute all commands in parallel (matches Microsoft spec)
-			obj, _ := devConfig.InitializeCommand.AsObject()
-			err = executeHostCommandsParallel(obj, mountPath, config.Verbose)
-		}
-
-		if err != nil {
-			return fmt.Errorf("initializeCommand failed: %w", err)
-		}
-
-		if config.Verbose {
-			fmt.Fprintf(os.Stderr, "initializeCommand completed successfully\n")
-		}
+	if err := executeInitializeCommand(devConfig.InitializeCommand, mountPath, config.Verbose); err != nil {
+		return err
 	}
 
 	// Step 7: Check if container already running
@@ -1330,44 +1297,8 @@ func runWithCompose(devConfig *devcontainer.Config, config *RunConfig, mountPath
 	}
 
 	// Execute initializeCommand on HOST if present (same as standard workflow)
-	if devConfig.InitializeCommand != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  Running initializeCommand on host (executes code from devcontainer.json)...\n")
-
-		var err error
-		if devConfig.InitializeCommand.IsString() {
-			cmdStr, _ := devConfig.InitializeCommand.AsString()
-			if config.Verbose {
-				fmt.Fprintf(os.Stderr, "Executing: %s\n", cmdStr)
-			}
-			cmd := exec.Command("/bin/sh", "-c", cmdStr)
-			cmd.Dir = mountPath
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			err = cmd.Run()
-		} else if devConfig.InitializeCommand.IsArray() {
-			cmdArray, _ := devConfig.InitializeCommand.AsArray()
-			if len(cmdArray) > 0 {
-				if config.Verbose {
-					fmt.Fprintf(os.Stderr, "Executing: %v\n", cmdArray)
-				}
-				cmd := exec.Command(cmdArray[0], cmdArray[1:]...)
-				cmd.Dir = mountPath
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				err = cmd.Run()
-			}
-		} else if devConfig.InitializeCommand.IsObject() {
-			obj, _ := devConfig.InitializeCommand.AsObject()
-			err = executeHostCommandsParallel(obj, mountPath, config.Verbose)
-		}
-
-		if err != nil {
-			return fmt.Errorf("initializeCommand failed: %w", err)
-		}
-
-		if config.Verbose {
-			fmt.Fprintf(os.Stderr, "initializeCommand completed successfully\n")
-		}
+	if err := executeInitializeCommand(devConfig.InitializeCommand, mountPath, config.Verbose); err != nil {
+		return err
 	}
 
 	// Create compose runner
@@ -2062,6 +1993,58 @@ func copyFileViaExec(dockerClient *docker.Client, containerID, srcPath, dstPath,
 	// This function is no longer used for Apple Container
 	// Just return error for now
 	return fmt.Errorf("file copying not supported for Apple Container")
+}
+
+// executeInitializeCommand executes initializeCommand on the host before container creation
+// This runs on the host machine and handles all command formats (string, array, object)
+// Security note: this executes arbitrary commands from devcontainer.json
+func executeInitializeCommand(initCmd *devcontainer.LifecycleCommand, workDir string, verbose bool) error {
+	if initCmd == nil {
+		return nil
+	}
+
+	fmt.Fprintf(os.Stderr, "⚠️  Running initializeCommand on host (executes code from devcontainer.json)...\n")
+
+	var err error
+	if initCmd.IsString() {
+		// String command: execute with shell
+		cmdStr, _ := initCmd.AsString()
+		if verbose {
+			fmt.Fprintf(os.Stderr, "Executing: %s\n", cmdStr)
+		}
+		cmd := exec.Command("/bin/sh", "-c", cmdStr)
+		cmd.Dir = workDir
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err = cmd.Run()
+	} else if initCmd.IsArray() {
+		// Array command: execute directly without shell
+		cmdArray, _ := initCmd.AsArray()
+		if len(cmdArray) > 0 {
+			if verbose {
+				fmt.Fprintf(os.Stderr, "Executing: %v\n", cmdArray)
+			}
+			cmd := exec.Command(cmdArray[0], cmdArray[1:]...)
+			cmd.Dir = workDir
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err = cmd.Run()
+		}
+	} else if initCmd.IsObject() {
+		// Object command: execute all commands in parallel (matches Microsoft spec)
+		obj, _ := initCmd.AsObject()
+		err = executeHostCommandsParallel(obj, workDir, verbose)
+	}
+
+	if err != nil {
+		return fmt.Errorf("initializeCommand failed: %w", err)
+	}
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "initializeCommand completed successfully\n")
+	}
+
+	return nil
 }
 
 // executeHostCommandsParallel executes multiple host commands in parallel
