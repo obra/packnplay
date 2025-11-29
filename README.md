@@ -270,97 +270,31 @@ Pack 'n Play creates git worktrees in XDG-compliant locations for isolation:
 
 ### Dev Container Support
 
-packnplay achieves **100% Microsoft devcontainer specification compliance**—complete, production-ready support for reproducible development environments across image, dockerfile, and Docker Compose workflows. 🎉
+packnplay achieves **100% Microsoft devcontainer specification compliance**—full support for reproducible development environments.
 
 **Quick Example:**
 ```json
 {
-  "name": "Node.js Development",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
   "features": {
-    "ghcr.io/devcontainers/features/node:1": {
-      "version": "20",
-      "nodeGypDependencies": true
-    },
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {
-      "version": "latest",
-      "enableNonRootDocker": true
-    }
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" }
   },
-  "workspaceFolder": "/workspace",
   "forwardPorts": [3000],
-  "containerEnv": {
-    "NODE_ENV": "development"
-  },
-  "mounts": [
-    "type=tmpfs,target=/tmp/fast-storage"
-  ],
-  "onCreateCommand": "npm install",
-  "postCreateCommand": "npm run build",
-  "postStartCommand": "echo 'Development environment ready'"
+  "postCreateCommand": "npm install"
 }
 ```
 
-#### **🎯 Supported Features**
+**Supported:**
+- Image, Dockerfile, and Docker Compose orchestration
+- Microsoft devcontainer features (OCI, local, HTTPS)
+- All lifecycle commands (onCreate, postCreate, postStart, etc.)
+- Environment variables with full substitution
+- Port forwarding and custom mounts
+- User management, host requirements, shutdown actions
 
-**✅ Container Configuration:**
-- `name` - Container display name
-- `image` - Any Docker registry image
-- `dockerfile` / `build` - Custom builds with args, target, context, cacheFrom
-- `workspaceFolder`, `workspaceMount` - Workspace configuration
-- `remoteUser` - User management (auto-detected when omitted)
+**📖 Full Documentation:** See [DevContainer Guide](docs/DEVCONTAINER_GUIDE.md) for complete reference.
 
-**✅ Microsoft DevContainer Features:**
-- **OCI Registry**: Full `ghcr.io/devcontainers/features/*` support
-- **Local Features**: `.devcontainer/local-features/`
-- **Option Validation**: String, boolean, number types with enum checking
-- **Dependencies**: Complex chains via `dependsOn` object format
-- **Properties**: `privileged`, `capAdd`, `securityOpt`, `init`, `entrypoint`, `mounts`
-- **Variables**: `${devcontainerId}`, `${localWorkspaceFolder}`, `${containerWorkspaceFolder}`
-
-**✅ Environment Variables:**
-- `containerEnv` - Runtime variables with full substitution
-- `remoteEnv` - Variables that can reference containerEnv values
-- **Built-in**: `_REMOTE_USER`, `_REMOTE_USER_HOME`, `_CONTAINER_USER`
-- **Patterns**: `${localEnv:VAR}`, `${containerEnv:VAR}`, `${containerWorkspaceFolder}`, `${devcontainerId}`
-
-**✅ Port Forwarding:**
-- `forwardPorts` - Secure localhost binding (matches Microsoft behavior)
-- **Formats**: Integers (`3000`), strings (`"8080:3000"`), IP binding (`"127.0.0.1:8080:3000"`)
-
-**✅ Lifecycle Commands:**
-- `initializeCommand` - Runs on host before container creation
-- `onCreateCommand` - Runs once on creation (tracks changes)
-- `updateContentCommand` - Content change hooks
-- `postCreateCommand` - Runs once after creation
-- `postStartCommand` - Runs every container start
-- `postAttachCommand` - Runs on `packnplay attach`
-- **Formats**: String (shell), array (exec), object (parallel)
-- **Execution order**: Feature commands precede user commands
-
-**✅ Advanced Features:**
-- `mounts` - Volume mounts with variable substitution
-- `runArgs` - Additional Docker arguments
-- **Signal Handling**: Graceful shutdown with SIGTERM
-- **Feature Integration**: Complete metadata processing
-
-#### **✅ Complete Specification Support**
-
-All devcontainer specification properties are now supported (excluding VS Code-specific `customizations` which is intentionally out of scope for a CLI tool).
-
-**Recently Implemented:**
-- ✅ Container restart behavior (reuses stopped containers)
-- ✅ HTTPS tarball features (`https://example.com/feature.tgz`)
-- ✅ Private feature authentication (via Docker credentials)
-- ✅ Lockfile support (`devcontainer-lock.json`)
-- ✅ `initializeCommand` (host-side pre-container execution)
-
-**See [GitHub Issues](https://github.com/obra/packnplay/issues?q=is%3Aissue+is%3Aopen+label%3Adevcontainer) for roadmap.**
-
-**📖 Full Documentation:** See [DevContainer Guide](docs/DEVCONTAINER_GUIDE.md) for complete reference with examples.
-
-**Fallback:**
-If `.devcontainer/devcontainer.json` not found, uses `ghcr.io/obra/packnplay/devcontainer:latest`
+**Fallback:** If no `.devcontainer/devcontainer.json`, uses `ghcr.io/obra/packnplay/devcontainer:latest`
 
 **Default container architecture:**
 - **Foundation**: Microsoft devcontainer features (reliable, maintained, consistent)

@@ -87,7 +87,7 @@ Advanced build configuration with arguments, targets, and caching.
 ### User Configuration
 
 #### `remoteUser`
-User to run commands as in the container.
+User to run commands as in the container (used for `docker exec`).
 
 ```json
 {
@@ -96,6 +96,48 @@ User to run commands as in the container.
 ```
 
 If not specified, packnplay auto-detects the appropriate user.
+
+#### `containerUser`
+User for container creation (used for `docker run --user`). Different from `remoteUser`.
+
+```json
+{
+  "containerUser": "root",
+  "remoteUser": "node"
+}
+```
+
+**Use Case:** Run container as root for setup, but exec commands as non-root user.
+
+#### `updateRemoteUserUID`
+Sync container user's UID/GID to match host user (Linux only).
+
+```json
+{
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true
+}
+```
+
+**Behavior:**
+- Only applies on Linux hosts (Docker Desktop handles this automatically)
+- Updates container user's UID/GID to match host user
+- Fixes file permission issues when sharing volumes
+
+#### `userEnvProbe`
+How to probe the user's environment for shell configuration.
+
+```json
+{
+  "userEnvProbe": "loginInteractiveShell"
+}
+```
+
+**Values:**
+- `none` - No shell probing
+- `loginShell` - Use login shell (`-l`)
+- `interactiveShell` - Use interactive shell (`-i`)
+- `loginInteractiveShell` - Use both (`-li`, default)
 
 ### Environment Variables
 
@@ -132,6 +174,34 @@ Environment variables that can reference `containerEnv` values.
 4. **devcontainer.json env vars** ⬅️ from containerEnv/remoteEnv
 5. CLI `--env` flags ⬅️ highest priority, overrides all
 
+### Workspace Configuration
+
+#### `workspaceFolder`
+Path inside the container where the workspace should be mounted.
+
+```json
+{
+  "workspaceFolder": "/workspace"
+}
+```
+
+If not specified, defaults to `/workspace`.
+
+#### `workspaceMount`
+Custom mount string for the workspace using Docker `--mount` syntax.
+
+```json
+{
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached"
+}
+```
+
+**Notes:**
+- Requires `workspaceFolder` to be set
+- Supports variable substitution
+- Use for advanced mount options (consistency, caching)
+
 ### Port Forwarding
 
 #### `forwardPorts`
@@ -154,6 +224,97 @@ Ports to expose from the container.
 **Priority Order:**
 1. **devcontainer.json ports** (applied first)
 2. CLI `-p` flags (applied second, can override)
+
+#### `portsAttributes`
+Per-port configuration for labels, protocols, and behavior.
+
+```json
+{
+  "forwardPorts": [3000, 8080],
+  "portsAttributes": {
+    "3000": {
+      "label": "Frontend",
+      "protocol": "http",
+      "onAutoForward": "notify"
+    },
+    "8080": {
+      "label": "API",
+      "protocol": "https",
+      "requireLocalPort": true,
+      "elevateIfNeeded": false
+    }
+  }
+}
+```
+
+**Fields:**
+- `label` - Display name for the port
+- `protocol` - `http` or `https`
+- `onAutoForward` - `notify`, `openBrowser`, `openBrowserOnce`, `openPreview`, `silent`, `ignore`
+- `requireLocalPort` - Fail if the specific local port is unavailable
+- `elevateIfNeeded` - Elevate permissions to bind privileged ports
+
+#### `otherPortsAttributes`
+Default attributes for ports not explicitly listed in `portsAttributes`.
+
+```json
+{
+  "portsAttributes": {
+    "3000": { "label": "App" }
+  },
+  "otherPortsAttributes": {
+    "onAutoForward": "silent"
+  }
+}
+```
+
+### Docker Compose Orchestration
+
+Use Docker Compose instead of a single image/dockerfile.
+
+#### `dockerComposeFile`
+Path to Docker Compose file(s).
+
+```json
+{
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app"
+}
+```
+
+Or multiple files:
+```json
+{
+  "dockerComposeFile": ["docker-compose.yml", "docker-compose.dev.yml"],
+  "service": "app"
+}
+```
+
+#### `service`
+Which service to connect to (required with `dockerComposeFile`).
+
+```json
+{
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "web"
+}
+```
+
+#### `runServices`
+Which services to start (defaults to all).
+
+```json
+{
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "runServices": ["app", "db", "redis"]
+}
+```
+
+**Notes:**
+- `dockerComposeFile` is mutually exclusive with `image`/`dockerfile`
+- Features are not supported with Docker Compose (install in your service image)
+- `shutdownAction: "stopCompose"` stops all services on exit
 
 ### Lifecycle Commands
 
@@ -207,6 +368,21 @@ Runs **once** after the container is created.
 - Re-runs if command content changes
 - Ideal for: building assets, database migrations
 
+#### `updateContentCommand`
+Runs when container content is updated (similar to onCreate but for content updates).
+
+```json
+{
+  "updateContentCommand": "npm run generate"
+}
+```
+
+**Behavior:**
+- Executes after onCreateCommand
+- Skipped on subsequent runs unless content changes
+- Re-runs if command content changes
+- Ideal for: code generation, content synchronization
+
 #### `postStartCommand`
 Runs **every time** the container starts.
 
@@ -220,6 +396,20 @@ Runs **every time** the container starts.
 - Executes every time
 - Not tracked (always runs)
 - Ideal for: starting development servers, watch mode
+
+#### `postAttachCommand`
+Runs when attaching to the container (via `packnplay attach`).
+
+```json
+{
+  "postAttachCommand": "echo 'Welcome back!'"
+}
+```
+
+**Behavior:**
+- Executes on every `packnplay attach` invocation
+- Runs before entering the container shell
+- Ideal for: status messages, environment refresh
 
 #### Command Formats
 
@@ -254,6 +444,76 @@ Executed directly without shell, safer for complex arguments.
 Executes multiple commands in parallel. Values can be strings or arrays.
 
 **Note:** All lifecycle commands support parallel execution via object format, including `initializeCommand` which runs parallel tasks on the host.
+
+### Lifecycle Control
+
+#### `waitFor`
+Which lifecycle command to wait for before considering the container ready.
+
+```json
+{
+  "waitFor": "postCreateCommand"
+}
+```
+
+**Values:**
+- `onCreateCommand`
+- `updateContentCommand`
+- `postCreateCommand`
+- `postStartCommand`
+
+**Note:** All commands run synchronously before the user command, so this is primarily for compatibility and documentation.
+
+#### `overrideCommand`
+Whether to override the container's CMD with the user command.
+
+```json
+{
+  "overrideCommand": true
+}
+```
+
+**Behavior:**
+- `true` (default): User command replaces container CMD
+- `false`: Container runs its default CMD
+
+#### `shutdownAction`
+What to do when the user exits the container.
+
+```json
+{
+  "shutdownAction": "stopContainer"
+}
+```
+
+**Values:**
+- `none` (default): Leave container running
+- `stopContainer`: Stop the container on exit
+- `stopCompose`: Stop all Docker Compose services on exit
+
+### Host Requirements
+
+#### `hostRequirements`
+Advisory minimum host system requirements.
+
+```json
+{
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb",
+    "gpu": true
+  }
+}
+```
+
+**Fields:**
+- `cpus` - Minimum CPU cores
+- `memory` - Minimum RAM (e.g., "8gb")
+- `storage` - Minimum disk space (e.g., "32gb")
+- `gpu` - Requires GPU
+
+**Note:** These are advisory only. Packnplay validates and warns but doesn't enforce.
 
 ### Custom Mounts
 
@@ -836,38 +1096,28 @@ You can manually inspect or delete metadata files.
 
 ## Known Limitations
 
-packnplay focuses on **core devcontainer functionality for AI coding agents** while maintaining compatibility with the devcontainer specification. The following features are intentionally not supported:
+packnplay achieves **100% Microsoft devcontainer specification compliance** for core functionality. The only intentional exclusion:
 
 ### Out of Scope (VS Code-Specific)
 
 1. **`customizations`**: Editor-specific extensions and settings
-   - **Why**: Editor-agnostic tool, not tied to VS Code
+   - **Why**: Editor-agnostic CLI tool, not tied to VS Code
    - **Alternative**: Configure your editor separately
 
-### Out of Scope (Complexity)
+### Technical Notes
 
-2. **`updateContentCommand`**: Runs when container content changes
-   - **Why**: Requires content change detection system
-   - **Alternative**: Use `postCreateCommand` for one-time setup
-
-### Future Enhancements
-
-5. **Lifecycle command timeouts**: Commands don't timeout
-   - **Status**: Future enhancement planned
-   - **Alternative**: Use timeout command in shell: `timeout 60 npm install`
-
-### Technical Limitations
-
-6. **Metadata per container**: Rebuilding image creates new container ID, new metadata
+2. **Metadata per container**: Rebuilding image creates new container ID, new metadata
    - **Impact**: Lifecycle commands re-run after rebuild
    - **Workaround**: None needed (expected behavior)
 
+3. **Lifecycle command timeouts**: Commands don't have built-in timeouts
+   - **Alternative**: Use timeout command in shell: `timeout 60 npm install`
+
 ### Compatibility Notes
 
-- packnplay implements a **useful subset** of the devcontainer specification
-- devcontainer.json files are portable between packnplay and VS Code Remote Containers
-- Unsupported fields are silently ignored (no errors)
-- See comparison table in "Comparison with VS Code Remote Containers" section above
+- devcontainer.json files are fully portable between packnplay and VS Code Remote Containers
+- Unsupported fields (`customizations`) are silently ignored (no errors)
+- All other specification properties are fully supported
 
 ## Examples
 
@@ -975,27 +1225,29 @@ packnplay focuses on **core devcontainer functionality for AI coding agents** wh
 
 ## Comparison with VS Code Remote Containers
 
-Packnplay implements a **subset** of the devcontainer specification:
+Packnplay achieves **100% devcontainer specification compliance** (excluding VS Code-specific features):
 
 | Feature | Packnplay | VS Code |
 |---------|-----------|---------|
 | `image` | ✅ | ✅ |
 | `dockerfile` / `build` | ✅ | ✅ |
-| `remoteUser` | ✅ | ✅ |
+| `dockerComposeFile` / `service` | ✅ | ✅ |
+| `remoteUser` / `containerUser` | ✅ | ✅ |
+| `updateRemoteUserUID` | ✅ | ✅ |
 | `containerEnv` / `remoteEnv` | ✅ | ✅ |
 | `forwardPorts` | ✅ | ✅ |
-| `mounts` | ✅ | ✅ |
+| `portsAttributes` | ✅ | ✅ |
+| `mounts` / `workspaceMount` | ✅ | ✅ |
 | `runArgs` | ✅ | ✅ |
-| `initializeCommand` | ✅ | ✅ |
-| `onCreateCommand` | ✅ | ✅ |
-| `postCreateCommand` | ✅ | ✅ |
-| `postStartCommand` | ✅ | ✅ |
-| `postAttachCommand` | ✅ | ✅ |
-| Variable substitution | ✅ (subset) | ✅ (full) |
-| `features` | ✅ | ✅ |
-| `customizations` | ❌ | ✅ |
+| All lifecycle commands | ✅ | ✅ |
+| `waitFor` / `overrideCommand` | ✅ | ✅ |
+| `shutdownAction` | ✅ | ✅ |
+| `hostRequirements` | ✅ | ✅ |
+| Variable substitution | ✅ | ✅ |
+| `features` (OCI, local, HTTPS) | ✅ | ✅ |
+| `customizations` | ❌ (out of scope) | ✅ |
 
-Packnplay focuses on **core devcontainer functionality** for AI coding agents while maintaining compatibility with the specification.
+Packnplay is a CLI tool focused on **AI coding agents**, so VS Code-specific `customizations` is intentionally excluded.
 
 ## See Also
 
