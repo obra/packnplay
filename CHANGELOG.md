@@ -5,6 +5,56 @@ All notable changes to packnplay will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.3.0] - 2025-11-29
+
+### Headline
+**100% Microsoft DevContainer Specification Compliance** - packnplay now fully implements every property in the Microsoft devcontainer.json specification.
+
+### Added
+
+#### Docker Compose Orchestration
+- **dockerComposeFile**: Single or multiple compose file support
+- **service**: Primary service selection for container connection
+- **runServices**: Selective service startup for complex multi-container environments
+
+#### Complete Lifecycle Management
+- **initializeCommand**: Host-side command execution before container creation
+- **Container Restart Behavior**: Automatic restart with lifecycle command replay
+- **shutdownAction**: Container lifecycle management on exit (none, stopContainer, stopCompose)
+- **overrideCommand**: Control over container CMD override behavior
+- **waitFor**: Lifecycle command synchronization
+
+#### User Management Properties
+- **containerUser**: Separate user for container creation (docker run --user)
+- **updateRemoteUserUID**: UID/GID synchronization for Linux hosts
+- **userEnvProbe**: Shell type detection (none, loginShell, interactiveShell, loginInteractiveShell)
+
+#### Port and Host Configuration
+- **portsAttributes**: Port metadata with labels, protocols, and auto-forward behavior
+- **requireLocalPort**: Require specific local port (fail if unavailable)
+- **elevateIfNeeded**: Elevate permissions for privileged port binding
+- **hostRequirements**: Advisory validation for cpus, memory, storage, and gpu
+
+#### Feature Distribution
+- **HTTPS Tarball Features**: Support for features distributed as HTTPS tarballs
+- **Lockfile Support**: `devcontainer-lock.json` for pinned feature versions
+
+### Fixed
+- remoteEnv containerWorkspaceFolder variable substitution
+- postAttachCommand format handling and container user execution
+- capAdd and securityOpt empty string filtering
+- Multiple feature entrypoint override warnings
+- waitFor config field validation
+- updateContentCommand lifecycle detection
+
+### Security
+- Fixed critical vulnerabilities in HTTPS tarball feature download
+
+### Documentation
+- Complete devcontainer specification documentation in DEVCONTAINER_GUIDE.md
+- Simplified README devcontainer section
+- Removed outdated "Known Limitations" claims
+
 ## [v1.2.0] - 2025-11-16
 
 ### Added
