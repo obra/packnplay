@@ -92,6 +92,16 @@ func (mb *MountBuilder) buildCredentialMounts(creds config.Credentials) []string
 			target := fmt.Sprintf("/home/%s/.gitconfig", mb.containerUser)
 			args = append(args, "-v", fmt.Sprintf("%s:%s:ro", gitconfig, target))
 		}
+		// Also check XDG location
+		xdgGitconfig := filepath.Join(mb.hostHomeDir, ".config", "git", "config")
+		if fileExists(xdgGitconfig) {
+			resolvedPath, err := resolveMountPath(xdgGitconfig)
+			if err != nil {
+				resolvedPath = xdgGitconfig
+			}
+			target := fmt.Sprintf("/home/%s/.config/git/config", mb.containerUser)
+			args = append(args, "-v", fmt.Sprintf("%s:%s:ro", resolvedPath, target))
+		}
 	}
 
 	if creds.SSH {

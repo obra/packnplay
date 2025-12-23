@@ -121,7 +121,7 @@ Override default credential settings per-invocation:
 
 ```bash
 # Enable specific credentials
-packnplay run --git-creds claude           # Mount git config (~/.gitconfig)
+packnplay run --git-creds claude           # Mount git config (~/.gitconfig, ~/.config/git/config)
 packnplay run --ssh-creds claude           # Mount SSH keys (~/.ssh)
 packnplay run --gh-creds claude            # Mount GitHub CLI credentials
 packnplay run --gpg-creds claude           # Mount GPG keys for signing
@@ -362,7 +362,7 @@ See [.devcontainer/README.md](.devcontainer/README.md) for instructions on build
 On first run, packnplay prompts you to choose which credentials to enable by default using a beautiful terminal UI.
 
 **Credentials are mounted read-only for security:**
-- **Git**: `~/.gitconfig` (git user configuration)
+- **Git**: `~/.gitconfig`, `~/.config/git/config` (git user configuration)
 - **SSH**: `~/.ssh` (SSH keys for authentication to servers and repos)
 - **GitHub CLI**: `~/.config/gh` (copied from Keychain on macOS, mounted on Linux)
 - **GPG**: `~/.gnupg` (for commit signing)
