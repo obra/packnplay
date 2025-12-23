@@ -828,6 +828,18 @@ func Run(config *RunConfig) error {
 			}
 			args = append(args, "-v", fmt.Sprintf("%s:/home/%s/.gitconfig:ro", resolvedPath, devConfig.RemoteUser))
 		}
+		// Also check XDG location
+		xdgGitconfigPath := filepath.Join(homeDir, ".config", "git", "config")
+		if fileExists(xdgGitconfigPath) {
+			resolvedPath, err := resolveMountPath(xdgGitconfigPath)
+			if err != nil {
+				if config.Verbose {
+					fmt.Fprintf(os.Stderr, "Warning: failed to resolve .config/git/config symlink: %v\n", err)
+				}
+				resolvedPath = xdgGitconfigPath
+			}
+			args = append(args, "-v", fmt.Sprintf("%s:/home/%s/.config/git/config:ro", resolvedPath, devConfig.RemoteUser))
+		}
 	}
 
 	// Mount SSH keys
