@@ -43,26 +43,84 @@ func TestClaudeAgent(t *testing.T) {
 	if !agent.RequiresSpecialHandling() {
 		t.Error("RequiresSpecialHandling() = false, want true for Claude")
 	}
+}
 
-	// Test mounts with vscode user
-	mounts := agent.GetMounts("/home/test", "vscode")
-	if len(mounts) != 1 {
-		t.Errorf("GetMounts() returned %d mounts, want 1", len(mounts))
-	}
+func TestClaudeAgentDualMount(t *testing.T) {
+	agent := &ClaudeAgent{}
 
-	if mounts[0].HostPath != "/home/test/.claude" {
-		t.Errorf("Mount HostPath = %v, want /home/test/.claude", mounts[0].HostPath)
-	}
+	// macOS-style: host home differs from container home → dual mount
+	t.Run("different paths produces dual mount", func(t *testing.T) {
+		mounts := agent.GetMounts("/Users/testuser", "vscode")
+		if len(mounts) != 2 {
+			t.Fatalf("GetMounts() returned %d mounts, want 2", len(mounts))
+		}
 
-	if mounts[0].ContainerPath != "/home/vscode/.claude" {
-		t.Errorf("Mount ContainerPath = %v, want /home/vscode/.claude", mounts[0].ContainerPath)
-	}
+		// First mount: same-path for absolute plugin path resolution
+		if mounts[0].HostPath != "/Users/testuser/.claude" {
+			t.Errorf("Mount[0] HostPath = %v, want /Users/testuser/.claude", mounts[0].HostPath)
+		}
+		if mounts[0].ContainerPath != "/Users/testuser/.claude" {
+			t.Errorf("Mount[0] ContainerPath = %v, want /Users/testuser/.claude", mounts[0].ContainerPath)
+		}
 
-	// Test mounts with root user
-	rootMounts := agent.GetMounts("/home/test", "root")
-	if rootMounts[0].ContainerPath != "/root/.claude" {
-		t.Errorf("Mount ContainerPath for root = %v, want /root/.claude", rootMounts[0].ContainerPath)
-	}
+		// Second mount: container $HOME for Claude Code discovery
+		if mounts[1].HostPath != "/Users/testuser/.claude" {
+			t.Errorf("Mount[1] HostPath = %v, want /Users/testuser/.claude", mounts[1].HostPath)
+		}
+		if mounts[1].ContainerPath != "/home/vscode/.claude" {
+			t.Errorf("Mount[1] ContainerPath = %v, want /home/vscode/.claude", mounts[1].ContainerPath)
+		}
+
+		// Both should be read-write
+		if mounts[0].ReadOnly || mounts[1].ReadOnly {
+			t.Error("Mounts should be read-write")
+		}
+	})
+
+	// Linux same-user: identical paths → single mount optimization
+	t.Run("identical paths produces single mount", func(t *testing.T) {
+		mounts := agent.GetMounts("/home/vscode", "vscode")
+		if len(mounts) != 1 {
+			t.Fatalf("GetMounts() returned %d mounts, want 1 for identical paths", len(mounts))
+		}
+
+		if mounts[0].HostPath != "/home/vscode/.claude" {
+			t.Errorf("Mount HostPath = %v, want /home/vscode/.claude", mounts[0].HostPath)
+		}
+		if mounts[0].ContainerPath != "/home/vscode/.claude" {
+			t.Errorf("Mount ContainerPath = %v, want /home/vscode/.claude", mounts[0].ContainerPath)
+		}
+	})
+
+	// Root user with different host path → dual mount
+	t.Run("root user produces dual mount", func(t *testing.T) {
+		mounts := agent.GetMounts("/Users/testuser", "root")
+		if len(mounts) != 2 {
+			t.Fatalf("GetMounts() returned %d mounts, want 2", len(mounts))
+		}
+
+		if mounts[0].ContainerPath != "/Users/testuser/.claude" {
+			t.Errorf("Mount[0] ContainerPath = %v, want /Users/testuser/.claude", mounts[0].ContainerPath)
+		}
+		if mounts[1].ContainerPath != "/root/.claude" {
+			t.Errorf("Mount[1] ContainerPath = %v, want /root/.claude", mounts[1].ContainerPath)
+		}
+	})
+
+	// Linux different user → dual mount
+	t.Run("linux different user produces dual mount", func(t *testing.T) {
+		mounts := agent.GetMounts("/home/alice", "vscode")
+		if len(mounts) != 2 {
+			t.Fatalf("GetMounts() returned %d mounts, want 2", len(mounts))
+		}
+
+		if mounts[0].ContainerPath != "/home/alice/.claude" {
+			t.Errorf("Mount[0] ContainerPath = %v, want /home/alice/.claude", mounts[0].ContainerPath)
+		}
+		if mounts[1].ContainerPath != "/home/vscode/.claude" {
+			t.Errorf("Mount[1] ContainerPath = %v, want /home/vscode/.claude", mounts[1].ContainerPath)
+		}
+	})
 }
 
 func TestCodexAgent(t *testing.T) {
