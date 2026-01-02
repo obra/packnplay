@@ -8,6 +8,10 @@ import (
 )
 
 func TestDetectContainerUser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping Docker-dependent test in short mode")
+	}
+
 	tests := []struct {
 		name         string
 		image        string
@@ -84,6 +88,10 @@ func TestDetectContainerUser(t *testing.T) {
 }
 
 func TestDetectUsersInImage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping Docker-dependent test in short mode")
+	}
+
 	tests := []struct {
 		name          string
 		image         string
@@ -130,6 +138,10 @@ func TestDetectUsersInImage(t *testing.T) {
 }
 
 func TestGetImageDefaultUser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping Docker-dependent test in short mode")
+	}
+
 	tests := []struct {
 		name         string
 		image        string
@@ -166,6 +178,9 @@ func TestGetImageDefaultUser(t *testing.T) {
 }
 
 func TestDirectDetection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping Docker-dependent test in short mode")
+	}
 	if !isDockerAvailable() {
 		t.Skip("Docker not available")
 	}
@@ -192,6 +207,9 @@ func TestDirectDetection(t *testing.T) {
 }
 
 func TestCaching(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping Docker-dependent test in short mode")
+	}
 	if !isDockerAvailable() {
 		t.Skip("Docker not available")
 	}
@@ -238,6 +256,9 @@ func TestCaching(t *testing.T) {
 }
 
 func TestGetImageID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping Docker-dependent test in short mode")
+	}
 	if !isDockerAvailable() {
 		t.Skip("Docker not available")
 	}
