@@ -43,7 +43,6 @@ func isDockerAvailable() bool {
 	return cmd.Run() == nil
 }
 
-
 // createTestProject creates a temporary test project with the given files
 // Returns the absolute path to the project directory
 func createTestProject(t *testing.T, files map[string]string) string {

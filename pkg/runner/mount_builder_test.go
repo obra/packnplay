@@ -125,11 +125,11 @@ func TestMountBuilder_BuildMounts_WithWorkspaceMount(t *testing.T) {
 	}
 
 	cfg := &RunConfig{
-		Path:                     "/host/project",
-		WorkspaceMount:           "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
-		WorkspaceFolder:          "/workspace",
-		WorkspaceMountContext:    ctx,
-		Credentials:              config.Credentials{},
+		Path:                  "/host/project",
+		WorkspaceMount:        "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+		WorkspaceFolder:       "/workspace",
+		WorkspaceMountContext: ctx,
+		Credentials:           config.Credentials{},
 	}
 
 	mounts, err := mb.BuildMounts(cfg)

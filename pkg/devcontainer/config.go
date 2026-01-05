@@ -40,30 +40,30 @@ type HostRequirements struct {
 // Config represents a parsed devcontainer.json
 type Config struct {
 	// Basic container configuration
-	Image        string                 `json:"image"`
-	DockerFile   string                 `json:"dockerFile"`
-	Build        *BuildConfig           `json:"build,omitempty"`
-	Name         string                 `json:"name,omitempty"`          // Display name for the dev container
-	ContainerUser   string                    `json:"containerUser,omitempty"` // User for container operations (docker run --user)
-	RemoteUser      string                    `json:"remoteUser"`              // User for remote operations (docker exec --user)
-	UpdateRemoteUserUID bool                  `json:"updateRemoteUserUID,omitempty"` // Sync container user UID/GID to match host (Linux only)
-	UserEnvProbe    string                    `json:"userEnvProbe,omitempty"`  // Shell type for environment probing: none, loginShell, interactiveShell, loginInteractiveShell
-	ContainerEnv         map[string]string         `json:"containerEnv,omitempty"`
-	RemoteEnv            map[string]string         `json:"remoteEnv,omitempty"`
-	ForwardPorts         []interface{}             `json:"forwardPorts,omitempty"`         // int or string
-	PortsAttributes      map[string]PortAttributes `json:"portsAttributes,omitempty"`      // Port-specific metadata
-	OtherPortsAttributes PortAttributes            `json:"otherPortsAttributes,omitempty"` // Default attributes for ports not in portsAttributes
-	Mounts               []string                  `json:"mounts,omitempty"`               // Docker mount syntax
-	RunArgs                     []string               `json:"runArgs,omitempty"`                     // Additional docker run arguments
-	Features                    map[string]interface{} `json:"features,omitempty"`
-	OverrideFeatureInstallOrder []string               `json:"overrideFeatureInstallOrder,omitempty"` // Manual feature installation order (overrides dependency resolution)
+	Image                       string                    `json:"image"`
+	DockerFile                  string                    `json:"dockerFile"`
+	Build                       *BuildConfig              `json:"build,omitempty"`
+	Name                        string                    `json:"name,omitempty"`                // Display name for the dev container
+	ContainerUser               string                    `json:"containerUser,omitempty"`       // User for container operations (docker run --user)
+	RemoteUser                  string                    `json:"remoteUser"`                    // User for remote operations (docker exec --user)
+	UpdateRemoteUserUID         bool                      `json:"updateRemoteUserUID,omitempty"` // Sync container user UID/GID to match host (Linux only)
+	UserEnvProbe                string                    `json:"userEnvProbe,omitempty"`        // Shell type for environment probing: none, loginShell, interactiveShell, loginInteractiveShell
+	ContainerEnv                map[string]string         `json:"containerEnv,omitempty"`
+	RemoteEnv                   map[string]string         `json:"remoteEnv,omitempty"`
+	ForwardPorts                []interface{}             `json:"forwardPorts,omitempty"`         // int or string
+	PortsAttributes             map[string]PortAttributes `json:"portsAttributes,omitempty"`      // Port-specific metadata
+	OtherPortsAttributes        PortAttributes            `json:"otherPortsAttributes,omitempty"` // Default attributes for ports not in portsAttributes
+	Mounts                      []string                  `json:"mounts,omitempty"`               // Docker mount syntax
+	RunArgs                     []string                  `json:"runArgs,omitempty"`              // Additional docker run arguments
+	Features                    map[string]interface{}    `json:"features,omitempty"`
+	OverrideFeatureInstallOrder []string                  `json:"overrideFeatureInstallOrder,omitempty"` // Manual feature installation order (overrides dependency resolution)
 
 	// Security properties - can be set directly in devcontainer.json or via features
-	Privileged   *bool    `json:"privileged,omitempty"`   // Run container in privileged mode
-	Init         *bool    `json:"init,omitempty"`         // Add tiny init process to reap zombie processes
-	CapAdd       []string `json:"capAdd,omitempty"`       // Linux capabilities to add
-	SecurityOpt  []string `json:"securityOpt,omitempty"`  // Security options (e.g., seccomp, apparmor)
-	Entrypoint   []string `json:"-"`                      // Container entrypoint (custom unmarshaling handles string or array)
+	Privileged  *bool    `json:"privileged,omitempty"`  // Run container in privileged mode
+	Init        *bool    `json:"init,omitempty"`        // Add tiny init process to reap zombie processes
+	CapAdd      []string `json:"capAdd,omitempty"`      // Linux capabilities to add
+	SecurityOpt []string `json:"securityOpt,omitempty"` // Security options (e.g., seccomp, apparmor)
+	Entrypoint  []string `json:"-"`                     // Container entrypoint (custom unmarshaling handles string or array)
 
 	// Docker Compose orchestration (alternative to image/dockerfile)
 	DockerComposeFile interface{} `json:"dockerComposeFile,omitempty"` // string or []string - path(s) to compose file(s)
@@ -75,12 +75,12 @@ type Config struct {
 	WorkspaceMount  string `json:"workspaceMount,omitempty"`  // Custom mount string for workspace
 
 	// Lifecycle commands - complete Microsoft specification
-	InitializeCommand    *LifecycleCommand `json:"initializeCommand,omitempty"`    // Runs on host before container creation
+	InitializeCommand    *LifecycleCommand `json:"initializeCommand,omitempty"` // Runs on host before container creation
 	OnCreateCommand      *LifecycleCommand `json:"onCreateCommand,omitempty"`
 	UpdateContentCommand *LifecycleCommand `json:"updateContentCommand,omitempty"`
 	PostCreateCommand    *LifecycleCommand `json:"postCreateCommand,omitempty"`
 	PostStartCommand     *LifecycleCommand `json:"postStartCommand,omitempty"`
-	PostAttachCommand    *LifecycleCommand `json:"postAttachCommand,omitempty"`   // Runs every time IDE attaches
+	PostAttachCommand    *LifecycleCommand `json:"postAttachCommand,omitempty"` // Runs every time IDE attaches
 
 	// Lifecycle control
 	WaitFor         string `json:"waitFor,omitempty"`         // Which lifecycle command to wait for before setup is complete
@@ -95,42 +95,42 @@ type Config struct {
 func (c *Config) UnmarshalJSON(data []byte) error {
 	// Create a temporary struct with Entrypoint removed to avoid infinite recursion
 	type Alias struct {
-		Image               string                    `json:"image"`
-		DockerFile          string                    `json:"dockerFile"`
-		Build               *BuildConfig              `json:"build,omitempty"`
-		Name                string                    `json:"name,omitempty"`
-		ContainerUser       string                    `json:"containerUser,omitempty"`
-		RemoteUser          string                    `json:"remoteUser"`
-		UpdateRemoteUserUID bool                      `json:"updateRemoteUserUID,omitempty"`
-		UserEnvProbe        string                    `json:"userEnvProbe,omitempty"`
-		ContainerEnv         map[string]string         `json:"containerEnv,omitempty"`
-		RemoteEnv            map[string]string         `json:"remoteEnv,omitempty"`
-		ForwardPorts         []interface{}             `json:"forwardPorts,omitempty"`
-		PortsAttributes      map[string]PortAttributes `json:"portsAttributes,omitempty"`
-		OtherPortsAttributes PortAttributes            `json:"otherPortsAttributes,omitempty"`
-		Mounts               []string                  `json:"mounts,omitempty"`
-		RunArgs                     []string               `json:"runArgs,omitempty"`
-		Features                    map[string]interface{} `json:"features,omitempty"`
-		OverrideFeatureInstallOrder []string               `json:"overrideFeatureInstallOrder,omitempty"`
-		Privileged          *bool                     `json:"privileged,omitempty"`
-		Init                *bool                     `json:"init,omitempty"`
-		CapAdd              []string                  `json:"capAdd,omitempty"`
-		SecurityOpt         []string                  `json:"securityOpt,omitempty"`
-		DockerComposeFile   interface{}               `json:"dockerComposeFile,omitempty"`
-		Service             string                    `json:"service,omitempty"`
-		RunServices         []string                  `json:"runServices,omitempty"`
-		WorkspaceFolder     string                    `json:"workspaceFolder,omitempty"`
-		WorkspaceMount      string                    `json:"workspaceMount,omitempty"`
-		InitializeCommand   *LifecycleCommand         `json:"initializeCommand,omitempty"`
-		OnCreateCommand     *LifecycleCommand         `json:"onCreateCommand,omitempty"`
-		UpdateContentCommand *LifecycleCommand        `json:"updateContentCommand,omitempty"`
-		PostCreateCommand    *LifecycleCommand        `json:"postCreateCommand,omitempty"`
-		PostStartCommand     *LifecycleCommand        `json:"postStartCommand,omitempty"`
-		PostAttachCommand    *LifecycleCommand        `json:"postAttachCommand,omitempty"`
-		WaitFor              string                   `json:"waitFor,omitempty"`
-		OverrideCommand      *bool                    `json:"overrideCommand,omitempty"`
-		ShutdownAction       string                   `json:"shutdownAction,omitempty"`
-		HostRequirements     *HostRequirements        `json:"hostRequirements,omitempty"`
+		Image                       string                    `json:"image"`
+		DockerFile                  string                    `json:"dockerFile"`
+		Build                       *BuildConfig              `json:"build,omitempty"`
+		Name                        string                    `json:"name,omitempty"`
+		ContainerUser               string                    `json:"containerUser,omitempty"`
+		RemoteUser                  string                    `json:"remoteUser"`
+		UpdateRemoteUserUID         bool                      `json:"updateRemoteUserUID,omitempty"`
+		UserEnvProbe                string                    `json:"userEnvProbe,omitempty"`
+		ContainerEnv                map[string]string         `json:"containerEnv,omitempty"`
+		RemoteEnv                   map[string]string         `json:"remoteEnv,omitempty"`
+		ForwardPorts                []interface{}             `json:"forwardPorts,omitempty"`
+		PortsAttributes             map[string]PortAttributes `json:"portsAttributes,omitempty"`
+		OtherPortsAttributes        PortAttributes            `json:"otherPortsAttributes,omitempty"`
+		Mounts                      []string                  `json:"mounts,omitempty"`
+		RunArgs                     []string                  `json:"runArgs,omitempty"`
+		Features                    map[string]interface{}    `json:"features,omitempty"`
+		OverrideFeatureInstallOrder []string                  `json:"overrideFeatureInstallOrder,omitempty"`
+		Privileged                  *bool                     `json:"privileged,omitempty"`
+		Init                        *bool                     `json:"init,omitempty"`
+		CapAdd                      []string                  `json:"capAdd,omitempty"`
+		SecurityOpt                 []string                  `json:"securityOpt,omitempty"`
+		DockerComposeFile           interface{}               `json:"dockerComposeFile,omitempty"`
+		Service                     string                    `json:"service,omitempty"`
+		RunServices                 []string                  `json:"runServices,omitempty"`
+		WorkspaceFolder             string                    `json:"workspaceFolder,omitempty"`
+		WorkspaceMount              string                    `json:"workspaceMount,omitempty"`
+		InitializeCommand           *LifecycleCommand         `json:"initializeCommand,omitempty"`
+		OnCreateCommand             *LifecycleCommand         `json:"onCreateCommand,omitempty"`
+		UpdateContentCommand        *LifecycleCommand         `json:"updateContentCommand,omitempty"`
+		PostCreateCommand           *LifecycleCommand         `json:"postCreateCommand,omitempty"`
+		PostStartCommand            *LifecycleCommand         `json:"postStartCommand,omitempty"`
+		PostAttachCommand           *LifecycleCommand         `json:"postAttachCommand,omitempty"`
+		WaitFor                     string                    `json:"waitFor,omitempty"`
+		OverrideCommand             *bool                     `json:"overrideCommand,omitempty"`
+		ShutdownAction              string                    `json:"shutdownAction,omitempty"`
+		HostRequirements            *HostRequirements         `json:"hostRequirements,omitempty"`
 	}
 
 	var aux Alias

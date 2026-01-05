@@ -190,7 +190,7 @@ func TestOpenCodeAgent(t *testing.T) {
 
 	expected := Mount{
 		HostPath:      "/home/test/.config/opencode",
-		ContainerPath: "/home/vscode/.config/opencode", 
+		ContainerPath: "/home/vscode/.config/opencode",
 		ReadOnly:      false,
 	}
 
