@@ -21,9 +21,10 @@ func TestGetRemoteImageInfo(t *testing.T) {
 
 	info, err := getRemoteImageInfo(dockerClient, imageName)
 	if err != nil {
-		// Skip on docker manifest inspect failures - these are often due to
-		// external factors like rate limiting, network issues, or auth requirements
-		t.Skipf("Skipping due to docker manifest inspect failure (often rate limiting or network): %v", err)
+		if isTransientRegistryError(err) {
+			t.Skipf("Skipping due to transient registry error: %v", err)
+		}
+		t.Fatalf("getRemoteImageInfo() unexpected error = %v", err)
 	}
 
 	if info.Digest == "" {
@@ -33,6 +34,32 @@ func TestGetRemoteImageInfo(t *testing.T) {
 	if info.ShortDigest() == "" {
 		t.Error("ShortDigest should not be empty")
 	}
+}
+
+// isTransientRegistryError returns true for errors caused by external factors
+// (rate limiting, network issues, auth requirements) that should skip the test
+// rather than fail it. Returns false for unexpected errors that indicate bugs.
+func isTransientRegistryError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	transientPatterns := []string{
+		"toomanyrequests",     // Docker Hub rate limiting
+		"rate limit",          // Generic rate limit
+		"unauthorized",        // Auth required (CI environments)
+		"connection refused",  // Docker daemon not running
+		"timeout",             // Network timeout
+		"no such host",        // DNS failure
+		"network is unreachable",
+		"i/o timeout",
+	}
+	for _, pattern := range transientPatterns {
+		if strings.Contains(errStr, pattern) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCheckForNewVersion(t *testing.T) {

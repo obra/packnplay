@@ -2008,9 +2008,9 @@ func getConfiguredDefaultImage(runConfig *RunConfig) string {
 // getRemoteImageInfo gets version information about an image from the registry
 func getRemoteImageInfo(dockerClient *docker.Client, imageName string) (*ImageVersionInfo, error) {
 	// Use docker manifest inspect to get remote info without pulling
-	_, err := dockerClient.Run("manifest", "inspect", imageName)
+	output, err := dockerClient.Run("manifest", "inspect", imageName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to inspect remote image: %w", err)
+		return nil, fmt.Errorf("failed to inspect remote image: %w\nOutput: %s", err, output)
 	}
 
 	// For now, return minimal info (digest would be parsed from manifest)
