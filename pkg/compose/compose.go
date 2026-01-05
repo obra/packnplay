@@ -91,7 +91,9 @@ func (r *Runner) GetServiceContainerID() (string, error) {
 	output, err := cmd.Output()
 	if err != nil {
 		// If there's an error, try to get stderr for debugging
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		// Note: exitErr.Stderr is only populated when cmd.Stderr is nil.
+		// In verbose mode, stderr streams to terminal, so exitErr.Stderr will be empty.
+		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
 			return "", fmt.Errorf("failed to get service container ID: %w\nStderr: %s", err, exitErr.Stderr)
 		}
 		return "", fmt.Errorf("failed to get service container ID: %w", err)

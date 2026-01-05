@@ -3371,6 +3371,8 @@ func TestE2E_Lockfile(t *testing.T) {
 				}
 			}
 		}`,
+		// Node 18 is used because the lockfile pins to node feature v1.2.0,
+		// which only supports Node.js 18 (not 20+)
 		".devcontainer/devcontainer-lock.json": lockfileContent,
 	})
 	defer os.RemoveAll(projectDir)
