@@ -83,6 +83,7 @@ func (r *Runner) GetServiceContainerID() (string, error) {
 
 	if r.verbose {
 		fmt.Fprintf(os.Stderr, "+ %s %v\n", r.dockerClient.Command(), args)
+		cmd.Stderr = os.Stderr
 	}
 
 	// Use Output() instead of CombinedOutput() to avoid capturing stderr warnings
