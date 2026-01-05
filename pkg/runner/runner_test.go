@@ -104,7 +104,7 @@ func TestMultipleEntrypoints_Warning(t *testing.T) {
 	os.Stderr = oldStderr
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	stderrOutput := buf.String()
 
 	// Verify warning was printed
@@ -160,7 +160,7 @@ func TestSingleEntrypoint_NoWarning(t *testing.T) {
 	os.Stderr = oldStderr
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	stderrOutput := buf.String()
 
 	// Verify no warning was printed

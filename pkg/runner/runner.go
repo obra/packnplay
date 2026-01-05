@@ -1219,7 +1219,7 @@ func Run(config *RunConfig) error {
 			// Apply feature properties with variable substitution
 			// Pass entrypoint tracking so features can warn if they override config entrypoint
 			var enhancedEnv map[string]string
-			args, enhancedEnv, entrypointArgs, entrypointSet, entrypointSource = applier.ApplyFeatureProperties(args, resolvedFeatures, currentEnv, ctx, entrypointSet, entrypointSource)
+			args, enhancedEnv, entrypointArgs, _, _ = applier.ApplyFeatureProperties(args, resolvedFeatures, currentEnv, ctx, entrypointSet, entrypointSource)
 
 			// Add feature-contributed environment variables to docker args
 			// These go after devcontainer env but can still be overridden by user --env flags

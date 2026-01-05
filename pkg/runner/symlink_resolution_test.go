@@ -34,7 +34,7 @@ func TestSymlinkResolution(t *testing.T) {
 
 	// Change to the symlinked directory
 	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
+	t.Cleanup(func() { _ = os.Chdir(originalDir) })
 
 	err = os.Chdir(projectDir)
 	if err != nil {

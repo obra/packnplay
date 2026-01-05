@@ -3301,7 +3301,7 @@ echo "HTTPS feature installed" > /tmp/https-feature-marker
 	serverCmd := exec.CommandContext(ctx, "python3", "-m", "http.server", "8089", "--directory", serverDir)
 	err = serverCmd.Start()
 	require.NoError(t, err)
-	defer serverCmd.Process.Kill()
+	t.Cleanup(func() { _ = serverCmd.Process.Kill() })
 
 	// Wait for server to be ready
 	time.Sleep(2 * time.Second)

@@ -103,6 +103,8 @@ func (im *ImageManager) pullImage(image string) error {
 // For secrets, use containerEnv with ${localEnv:SECRET} variable substitution
 // which injects secrets at runtime without persisting them in the image.
 // Deprecated: Use buildImageWithLockfile for consistent feature versioning.
+//
+//nolint:unused // Backward compatibility during lockfile migration (Issue #14)
 func (im *ImageManager) buildImage(devConfig *devcontainer.Config, projectPath string) error {
 	return im.buildImageWithLockfile(devConfig, projectPath, nil)
 }
@@ -181,6 +183,8 @@ func (im *ImageManager) buildImageWithLockfile(devConfig *devcontainer.Config, p
 
 // buildWithFeatures builds a container image with devcontainer features
 // Deprecated: Use buildWithFeaturesAndLockfile for consistent feature versioning.
+//
+//nolint:unused // Backward compatibility during lockfile migration (Issue #14)
 func (im *ImageManager) buildWithFeatures(devConfig *devcontainer.Config, projectPath string, imageName string) error {
 	return im.buildWithFeaturesAndLockfile(devConfig, projectPath, imageName, nil)
 }

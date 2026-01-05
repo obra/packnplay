@@ -636,7 +636,7 @@ func TestResolveHTTPSFeature(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/gzip")
 		w.WriteHeader(http.StatusOK)
-		w.Write(tarballData)
+		_, _ = w.Write(tarballData)
 	}))
 	defer server.Close()
 
