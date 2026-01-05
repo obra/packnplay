@@ -1,7 +1,7 @@
 version: "2"
 
 run:
-  timeout: 5m
+  timeout: 5m  # Note: Ignored in v2, timeout is disabled by default
 
 linters:
   enable:
@@ -10,34 +10,49 @@ linters:
     - staticcheck
     - unused
     - misspell
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      # Ignore planned TUI implementation that will be integrated later
+      - path: pkg/config/config.go
+        linters:
+          - unused
+      # Ignore unused test infrastructure
+      - path: cmd/watch.go
+        linters:
+          - unused
+      - path: pkg/runner/image_manager_test.go
+        linters:
+          - unused
+      - path: pkg/runner/lifecycle_executor_test.go
+        linters:
+          - unused
+      - path: pkg/runner/registry_check_test.go
+        linters:
+          - unused
+      # Ignore planned feature implementations
+      - text: "checkAndNotifyAboutUpdates.*is unused"
+        linters:
+          - unused
+      - text: "getLocalImageInfo.*is unused"
+        linters:
+          - unused
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 
 formatters:
   enable:
     - gofmt
-
-issues:
-  exclude-rules:
-    # Ignore planned TUI implementation that will be integrated later
-    - path: pkg/config/config.go
-      linters:
-        - unused
-    # Ignore unused test infrastructure
-    - path: cmd/watch.go
-      linters:
-        - unused
-    - path: pkg/runner/image_manager_test.go
-      linters:
-        - unused
-    - path: pkg/runner/lifecycle_executor_test.go
-      linters:
-        - unused
-    - path: pkg/runner/registry_check_test.go
-      linters:
-        - unused
-    # Ignore planned feature implementations
-    - text: "checkAndNotifyAboutUpdates.*is unused"
-      linters:
-        - unused
-    - text: "getLocalImageInfo.*is unused"
-      linters:
-        - unused
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
