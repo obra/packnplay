@@ -48,7 +48,6 @@ func isDockerAvailable() bool {
 	return cmd.Run() == nil
 }
 
-
 // createTestProject creates a temporary test project with the given files
 // Returns the absolute path to the project directory
 func createTestProject(t *testing.T, files map[string]string) string {
@@ -3761,7 +3760,7 @@ func TestE2E_UpdateRemoteUserUID(t *testing.T) {
 		t.Skip("updateRemoteUserUID is Linux-only (Docker Desktop handles UID/GID mapping automatically)")
 	}
 	if isCI() {
-		t.Skip("updateRemoteUserUID test uses ubuntu:latest which lacks vscode user - needs fix")
+		t.Skip("updateRemoteUserUID feature does not remap UID when user already exists with different UID - feature bug")
 	}
 
 	// Get host UID/GID
@@ -3770,7 +3769,7 @@ func TestE2E_UpdateRemoteUserUID(t *testing.T) {
 
 	projectDir := createTestProject(t, map[string]string{
 		".devcontainer/devcontainer.json": `{
-  "image": "ubuntu:latest",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
   "remoteUser": "vscode",
   "updateRemoteUserUID": true
 }`,
