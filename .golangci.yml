@@ -1,15 +1,19 @@
+version: "2"
+
 run:
   timeout: 5m
 
 linters:
   enable:
     - errcheck
-    - gosimple
     - govet
     - staticcheck
     - unused
-    - gofmt
     - misspell
+
+formatters:
+  enable:
+    - gofmt
 
 issues:
   exclude-rules:
