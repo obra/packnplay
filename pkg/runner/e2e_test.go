@@ -183,23 +183,19 @@ func getPacknplayBinary(t *testing.T) string {
 		return packnplayBinaryPath
 	}
 
-	// Try to find packnplay in PATH
-	if path, err := exec.LookPath("packnplay"); err == nil {
-		packnplayBinaryPath = path
-		return path
-	}
-
-	// Build packnplay to temp location
+	// Always build fresh from source to ensure tests use current code
+	// (Don't use PATH lookup - installed binary may be outdated)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	binaryPath := filepath.Join(os.TempDir(), fmt.Sprintf("packnplay-test-%d", os.Getpid()))
 
-	// Get project root (assumes we're in pkg/runner/)
-	projectRoot, err := filepath.Abs("../..")
-	if err != nil {
-		t.Fatalf("Failed to get project root: %v", err)
+	// Get project root from this file's location (pkg/runner/e2e_test.go -> project root)
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("Failed to get test file location")
 	}
+	projectRoot := filepath.Dir(filepath.Dir(filepath.Dir(thisFile)))
 
 	t.Logf("Building packnplay binary to %s...", binaryPath)
 	buildCmd := exec.CommandContext(ctx, "go", "build", "-o", binaryPath, ".")
@@ -3365,7 +3361,7 @@ func TestE2E_Lockfile(t *testing.T) {
 			"image": "mcr.microsoft.com/devcontainers/base:ubuntu",
 			"features": {
 				"ghcr.io/devcontainers/features/node:1": {
-					"version": "20"
+					"version": "18"
 				}
 			}
 		}`,

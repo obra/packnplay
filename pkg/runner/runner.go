@@ -1502,12 +1502,14 @@ func runWithCompose(devConfig *devcontainer.Config, config *RunConfig, mountPath
 	}
 
 	// Convert relative compose file paths to absolute paths
+	// Compose file paths are relative to the devcontainer.json location (.devcontainer/)
+	devcontainerDir := filepath.Join(mountPath, ".devcontainer")
 	absoluteComposeFiles := make([]string, len(composeFiles))
 	for i, f := range composeFiles {
 		if filepath.IsAbs(f) {
 			absoluteComposeFiles[i] = f
 		} else {
-			absoluteComposeFiles[i] = filepath.Join(mountPath, f)
+			absoluteComposeFiles[i] = filepath.Join(devcontainerDir, f)
 		}
 	}
 
