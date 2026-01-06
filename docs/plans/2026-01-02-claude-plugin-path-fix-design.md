@@ -105,19 +105,37 @@ func TestClaudeAgentDualMount(t *testing.T) {
     agent := &ClaudeAgent{}
 
     // macOS-style: different paths -> dual mount
-    mounts := agent.GetMounts("/Users/testuser", "vscode")
-    assert.Len(t, mounts, 2)
-    assert.Equal(t, "/Users/testuser/.claude", mounts[0].ContainerPath)
-    assert.Equal(t, "/home/vscode/.claude", mounts[1].ContainerPath)
+    t.Run("different paths produces dual mount", func(t *testing.T) {
+        mounts := agent.GetMounts("/Users/testuser", "vscode")
+        if len(mounts) != 2 {
+            t.Fatalf("GetMounts() returned %d mounts, want 2", len(mounts))
+        }
+        if mounts[0].ContainerPath != "/Users/testuser/.claude" {
+            t.Errorf("Mount[0] ContainerPath = %v, want /Users/testuser/.claude", mounts[0].ContainerPath)
+        }
+        if mounts[1].ContainerPath != "/home/vscode/.claude" {
+            t.Errorf("Mount[1] ContainerPath = %v, want /home/vscode/.claude", mounts[1].ContainerPath)
+        }
+    })
 
     // Linux same-user: identical paths -> single mount
-    mounts = agent.GetMounts("/home/vscode", "vscode")
-    assert.Len(t, mounts, 1)
+    t.Run("identical paths produces single mount", func(t *testing.T) {
+        mounts := agent.GetMounts("/home/vscode", "vscode")
+        if len(mounts) != 1 {
+            t.Fatalf("GetMounts() returned %d mounts, want 1", len(mounts))
+        }
+    })
 
-    // Root user
-    mounts = agent.GetMounts("/Users/testuser", "root")
-    assert.Len(t, mounts, 2)
-    assert.Equal(t, "/root/.claude", mounts[1].ContainerPath)
+    // Root user with different host path -> dual mount
+    t.Run("root user produces dual mount", func(t *testing.T) {
+        mounts := agent.GetMounts("/Users/testuser", "root")
+        if len(mounts) != 2 {
+            t.Fatalf("GetMounts() returned %d mounts, want 2", len(mounts))
+        }
+        if mounts[1].ContainerPath != "/root/.claude" {
+            t.Errorf("Mount[1] ContainerPath = %v, want /root/.claude", mounts[1].ContainerPath)
+        }
+    })
 }
 ```
 
@@ -146,4 +164,5 @@ Verify `BuildAgentMounts()` produces correct Docker `-v` flags.
 
 1. `pkg/agents/agent.go` - Update `ClaudeAgent.GetMounts()`
 2. `pkg/agents/agent_test.go` - Add dual mount tests
-3. `pkg/runner/mount_builder_test.go` - Update integration tests if needed
+3. `pkg/runner/runner.go` - Remove redundant hardcoded `.claude` mount (now handled by agent abstraction)
+4. `pkg/runner/mount_builder_test.go` - Update integration tests if needed

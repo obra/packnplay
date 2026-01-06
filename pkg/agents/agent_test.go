@@ -90,6 +90,24 @@ func TestClaudeAgentDualMount(t *testing.T) {
 		if mounts[0].ContainerPath != "/home/vscode/.claude" {
 			t.Errorf("Mount ContainerPath = %v, want /home/vscode/.claude", mounts[0].ContainerPath)
 		}
+		if mounts[0].ReadOnly {
+			t.Error("Mount should be read-write")
+		}
+	})
+
+	// Root-as-root: identical paths → single mount optimization
+	t.Run("root as root produces single mount", func(t *testing.T) {
+		mounts := agent.GetMounts("/root", "root")
+		if len(mounts) != 1 {
+			t.Fatalf("GetMounts() returned %d mounts, want 1 for root-as-root", len(mounts))
+		}
+
+		if mounts[0].HostPath != "/root/.claude" {
+			t.Errorf("Mount HostPath = %v, want /root/.claude", mounts[0].HostPath)
+		}
+		if mounts[0].ContainerPath != "/root/.claude" {
+			t.Errorf("Mount ContainerPath = %v, want /root/.claude", mounts[0].ContainerPath)
+		}
 	})
 
 	// Root user with different host path → dual mount
