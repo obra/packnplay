@@ -23,6 +23,18 @@ func TestGenerateContainerName(t *testing.T) {
 			worktreeName: "feature/auth",
 			want:         "packnplay-myproject-feature-auth",
 		},
+		{
+			name:         "worktree with @ symbol",
+			projectPath:  "/home/user/myproject",
+			worktreeName: "user@team-PROJ-147",
+			want:         "packnplay-myproject-user-team-PROJ-147",
+		},
+		{
+			name:         "project path with special chars",
+			projectPath:  "/home/user/my@project",
+			worktreeName: "main",
+			want:         "packnplay-my-project-main",
+		},
 	}
 
 	for _, tt := range tests {

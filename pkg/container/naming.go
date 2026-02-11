@@ -8,9 +8,9 @@ import (
 
 // GenerateContainerName creates a container name from project and worktree
 func GenerateContainerName(projectPath, worktreeName string) string {
-	projectName := filepath.Base(projectPath)
-	sanitizedWorktree := sanitizeName(worktreeName)
-	return fmt.Sprintf("packnplay-%s-%s", projectName, sanitizedWorktree)
+	projectName := sanitizeName(filepath.Base(projectPath))
+	worktree := sanitizeName(worktreeName)
+	return fmt.Sprintf("packnplay-%s-%s", projectName, worktree)
 }
 
 // GenerateImageName creates an image name for a built devcontainer
@@ -22,11 +22,17 @@ func GenerateImageName(projectPath string) string {
 
 // sanitizeName converts a name to docker-compatible format
 func sanitizeName(name string) string {
-	// Docker container names: [a-zA-Z0-9][a-zA-Z0-9_.-]*
-	name = strings.ReplaceAll(name, "/", "-")
-	name = strings.ReplaceAll(name, " ", "-")
-	name = strings.ReplaceAll(name, ":", "-")
-	return name
+	// Docker container names must match: [a-zA-Z0-9][a-zA-Z0-9_.-]*
+	// Replace any character not in the allowed set with a hyphen.
+	var b strings.Builder
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '.' || r == '-' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('-')
+		}
+	}
+	return b.String()
 }
 
 // GenerateLabels creates Docker labels for packnplay-managed containers
