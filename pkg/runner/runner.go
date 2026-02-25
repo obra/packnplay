@@ -827,11 +827,6 @@ func Run(config *RunConfig) error {
 			}
 			args = append(args, "-v", fmt.Sprintf("%s:/home/%s/.gitconfig:ro", resolvedPath, devConfig.RemoteUser))
 		}
-
-		// Warn if gitconfig has SSH insteadOf rules but SSH keys aren't forwarded
-		if !config.Credentials.SSH {
-			warnSSHInsteadOfRules()
-		}
 	}
 
 	// Mount SSH keys
@@ -1506,12 +1501,14 @@ func runWithCompose(devConfig *devcontainer.Config, config *RunConfig, mountPath
 	}
 
 	// Convert relative compose file paths to absolute paths
+	// Compose file paths are relative to the devcontainer.json location (.devcontainer/)
+	devcontainerDir := filepath.Join(mountPath, ".devcontainer")
 	absoluteComposeFiles := make([]string, len(composeFiles))
 	for i, f := range composeFiles {
 		if filepath.IsAbs(f) {
 			absoluteComposeFiles[i] = f
 		} else {
-			absoluteComposeFiles[i] = filepath.Join(mountPath, f)
+			absoluteComposeFiles[i] = filepath.Join(devcontainerDir, f)
 		}
 	}
 
@@ -2010,9 +2007,9 @@ func getConfiguredDefaultImage(runConfig *RunConfig) string {
 // getRemoteImageInfo gets version information about an image from the registry
 func getRemoteImageInfo(dockerClient *docker.Client, imageName string) (*ImageVersionInfo, error) {
 	// Use docker manifest inspect to get remote info without pulling
-	_, err := dockerClient.Run("manifest", "inspect", imageName)
+	output, err := dockerClient.Run("manifest", "inspect", imageName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to inspect remote image: %w", err)
+		return nil, fmt.Errorf("failed to inspect remote image: %w\nOutput: %s", err, output)
 	}
 
 	// For now, return minimal info (digest would be parsed from manifest)

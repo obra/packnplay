@@ -83,11 +83,20 @@ func (r *Runner) GetServiceContainerID() (string, error) {
 
 	if r.verbose {
 		fmt.Fprintf(os.Stderr, "+ %s %v\n", r.dockerClient.Command(), args)
+		cmd.Stderr = os.Stderr
 	}
 
-	output, err := cmd.CombinedOutput()
+	// Use Output() instead of CombinedOutput() to avoid capturing stderr warnings
+	// (docker compose prints deprecation warnings to stderr that would pollute the container ID)
+	output, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("failed to get service container ID: %w\nOutput: %s", err, output)
+		// If there's an error, try to get stderr for debugging
+		// Note: exitErr.Stderr is only populated when cmd.Stderr is nil.
+		// In verbose mode, stderr streams to terminal, so exitErr.Stderr will be empty.
+		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+			return "", fmt.Errorf("failed to get service container ID: %w\nStderr: %s", err, exitErr.Stderr)
+		}
+		return "", fmt.Errorf("failed to get service container ID: %w", err)
 	}
 
 	containerID := strings.TrimSpace(string(output))

@@ -35,6 +35,16 @@ jobs:
           docker pull ubuntu:22.04
           docker pull alpine:latest
 
+      - name: Create packnplay config for CI
+        run: |
+          mkdir -p ~/.config/packnplay
+          cat > ~/.config/packnplay/config.json << 'EOF'
+          {
+            "container_runtime": "docker",
+            "default_image": "ghcr.io/obra/packnplay/devcontainer:latest"
+          }
+          EOF
+
       - name: Run tests
         run: make test
 
