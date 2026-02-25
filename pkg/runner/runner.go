@@ -827,6 +827,11 @@ func Run(config *RunConfig) error {
 			}
 			args = append(args, "-v", fmt.Sprintf("%s:/home/%s/.gitconfig:ro", resolvedPath, devConfig.RemoteUser))
 		}
+
+		// Warn if gitconfig has SSH insteadOf rules but SSH keys aren't forwarded
+		if !config.Credentials.SSH {
+			warnSSHInsteadOfRules()
+		}
 	}
 
 	// Mount SSH keys
