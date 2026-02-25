@@ -2,6 +2,7 @@ package runner
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -78,18 +79,24 @@ func hasSSHInsteadOfRules() []string {
 // warnSSHInsteadOfRules prints a warning if the user's gitconfig rewrites URLs
 // to SSH but SSH keys are not being forwarded into the container.
 func warnSSHInsteadOfRules() {
+	warnSSHInsteadOfRulesTo(os.Stderr)
+}
+
+// warnSSHInsteadOfRulesTo writes the SSH insteadOf warning to w.
+// Separated from warnSSHInsteadOfRules to allow testing.
+func warnSSHInsteadOfRulesTo(w io.Writer) {
 	rewrites := hasSSHInsteadOfRules()
 	if len(rewrites) == 0 {
 		return
 	}
 
-	fmt.Fprintf(os.Stderr, "\n"+
+	fmt.Fprintf(w, "\n"+
 		"WARNING: Your ~/.gitconfig contains insteadOf rules that rewrite URLs to SSH:\n"+
 		"\n")
 	for _, r := range rewrites {
-		fmt.Fprintf(os.Stderr, "%s\n", r)
+		fmt.Fprintf(w, "%s\n", r)
 	}
-	fmt.Fprintf(os.Stderr, "\n"+
+	fmt.Fprintf(w, "\n"+
 		"Since SSH keys are not being forwarded to the container, git operations\n"+
 		"using these rewritten URLs will fail. Consider either:\n"+
 		"  - Forwarding your SSH keys with: packnplay --credentials ssh\n"+
