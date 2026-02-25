@@ -182,7 +182,7 @@ func init() {
 	runCmd.Flags().StringArrayVarP(&runPublishPorts, "publish", "p", []string{}, "Publish container port(s) to host (format: [hostIP:]hostPort:containerPort[/protocol])")
 	runCmd.Flags().StringVar(&runRuntime, "runtime", "", "Container runtime to use (docker/podman/container)")
 	runCmd.Flags().StringVar(&runConfig, "config", "", "API config profile (anthropic, z.ai, anthropic-work, claude-personal)")
-	runCmd.Flags().BoolVar(&runReconnect, "reconnect", false, "Reconnect to existing container instead of failing")
+	runCmd.Flags().BoolVarP(&runReconnect, "reconnect", "r", false, "Reconnect to existing container instead of failing")
 	runCmd.Flags().BoolVar(&runVerbose, "verbose", false, "Show all docker/git commands")
 
 	// Credential flags (use pointers so we can detect if they were explicitly set)
