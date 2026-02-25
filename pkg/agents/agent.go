@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"fmt"
 	"path/filepath"
 )
 
@@ -11,6 +12,10 @@ type Agent interface {
 	DefaultAPIKeyEnv() string      // e.g., "ANTHROPIC_API_KEY", "OPENAI_API_KEY"
 	RequiresSpecialHandling() bool // Claude needs credential overlay, others don't
 	GetMounts(hostHomeDir string, containerUser string) []Mount
+	// GetSetupCommands returns shell commands to run inside the container after start.
+	// Used for one-time setup that can't be expressed as a bind mount (e.g. symlinks).
+	// Returns nil if no setup is needed.
+	GetSetupCommands(hostHomeDir string, containerUser string) []string
 }
 
 // Mount represents a directory or file mount
@@ -49,34 +54,40 @@ func (c *ClaudeAgent) GetMounts(hostHomeDir string, containerUser string) []Moun
 		containerHomeDir = "/home/" + containerUser
 	}
 
-	hostClaudePath := filepath.Join(hostHomeDir, ".claude")
-	containerClaudePath := filepath.Join(containerHomeDir, ".claude")
-
-	// If paths are already the same (e.g., Linux with same user), only need one mount
-	if hostClaudePath == containerClaudePath {
-		return []Mount{
-			{
-				HostPath:      hostClaudePath,
-				ContainerPath: containerClaudePath,
-				ReadOnly:      false,
-			},
-		}
-	}
-
-	// Dual mount required: Claude Code finds config at $HOME/.claude, but
-	// installed_plugins.json contains absolute host paths that must resolve.
-	// Mount at both locations so both access patterns work.
 	return []Mount{
 		{
-			HostPath:      hostClaudePath,
-			ContainerPath: hostClaudePath, // Same as host (for plugin absolute paths)
+			HostPath:      filepath.Join(hostHomeDir, ".claude"),
+			ContainerPath: filepath.Join(containerHomeDir, ".claude"),
 			ReadOnly:      false,
 		},
-		{
-			HostPath:      hostClaudePath,
-			ContainerPath: containerClaudePath, // At container $HOME (for Claude Code)
-			ReadOnly:      false,
-		},
+	}
+}
+
+// GetSetupCommands returns a shell command that creates a symlink from the host
+// home directory path to the container home directory. This lets absolute paths
+// baked into files like installed_plugins.json resolve correctly inside the
+// container without a second bind mount.
+//
+// Example: on macOS, hostHomeDir=/Users/jesse, containerHome=/home/vscode
+// → creates symlink /Users/jesse → /home/vscode inside the container
+// → so /Users/jesse/.claude/plugins/... resolves to /home/vscode/.claude/plugins/...
+func (c *ClaudeAgent) GetSetupCommands(hostHomeDir string, containerUser string) []string {
+	containerHomeDir := "/root"
+	if containerUser != "root" {
+		containerHomeDir = "/home/" + containerUser
+	}
+
+	// Paths already match — no symlink needed
+	if hostHomeDir == containerHomeDir {
+		return nil
+	}
+
+	// Create the parent directory (e.g. /Users on a Linux container) then
+	// symlink the host home path to the container home path.
+	// -s: symbolic  -f: replace existing  -n: don't follow if target is already a symlink
+	parentDir := filepath.Dir(hostHomeDir)
+	return []string{
+		fmt.Sprintf("mkdir -p %s && ln -sfn %s %s", parentDir, containerHomeDir, hostHomeDir),
 	}
 }
 
@@ -87,6 +98,9 @@ func (c *CodexAgent) Name() string                  { return "codex" }
 func (c *CodexAgent) ConfigDir() string             { return ".codex" }
 func (c *CodexAgent) DefaultAPIKeyEnv() string      { return "OPENAI_API_KEY" }
 func (c *CodexAgent) RequiresSpecialHandling() bool { return false } // Simple config mount
+func (c *CodexAgent) GetSetupCommands(hostHomeDir string, containerUser string) []string {
+	return nil
+}
 
 func (c *CodexAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
 	containerHomeDir := "/root"
@@ -110,6 +124,9 @@ func (g *GeminiAgent) Name() string                  { return "gemini" }
 func (g *GeminiAgent) ConfigDir() string             { return ".gemini" }
 func (g *GeminiAgent) DefaultAPIKeyEnv() string      { return "GEMINI_API_KEY" }
 func (g *GeminiAgent) RequiresSpecialHandling() bool { return false } // Simple config mount
+func (g *GeminiAgent) GetSetupCommands(hostHomeDir string, containerUser string) []string {
+	return nil
+}
 
 func (g *GeminiAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
 	containerHomeDir := "/root"
@@ -133,6 +150,9 @@ func (c *CopilotAgent) Name() string                  { return "copilot" }
 func (c *CopilotAgent) ConfigDir() string             { return ".copilot" }
 func (c *CopilotAgent) DefaultAPIKeyEnv() string      { return "GH_TOKEN" } // Uses GitHub auth
 func (c *CopilotAgent) RequiresSpecialHandling() bool { return false }
+func (c *CopilotAgent) GetSetupCommands(hostHomeDir string, containerUser string) []string {
+	return nil
+}
 
 func (c *CopilotAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
 	containerHomeDir := "/root"
@@ -156,6 +176,9 @@ func (q *QwenAgent) Name() string                  { return "qwen" }
 func (q *QwenAgent) ConfigDir() string             { return ".qwen" }
 func (q *QwenAgent) DefaultAPIKeyEnv() string      { return "QWEN_API_KEY" }
 func (q *QwenAgent) RequiresSpecialHandling() bool { return false }
+func (q *QwenAgent) GetSetupCommands(hostHomeDir string, containerUser string) []string {
+	return nil
+}
 
 func (q *QwenAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
 	containerHomeDir := "/root"
@@ -179,6 +202,9 @@ func (c *CursorAgent) Name() string                  { return "cursor" }
 func (c *CursorAgent) ConfigDir() string             { return ".cursor" }
 func (c *CursorAgent) DefaultAPIKeyEnv() string      { return "CURSOR_API_KEY" } // Assuming based on pattern
 func (c *CursorAgent) RequiresSpecialHandling() bool { return false }
+func (c *CursorAgent) GetSetupCommands(hostHomeDir string, containerUser string) []string {
+	return nil
+}
 
 func (c *CursorAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
 	containerHomeDir := "/root"
@@ -202,6 +228,9 @@ func (a *AmpAgent) Name() string                  { return "amp" }
 func (a *AmpAgent) ConfigDir() string             { return ".config/amp" } // Uses XDG config
 func (a *AmpAgent) DefaultAPIKeyEnv() string      { return "AMP_API_KEY" }
 func (a *AmpAgent) RequiresSpecialHandling() bool { return false }
+func (a *AmpAgent) GetSetupCommands(hostHomeDir string, containerUser string) []string {
+	return nil
+}
 
 func (a *AmpAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
 	containerHomeDir := "/root"
@@ -225,6 +254,9 @@ func (d *DeepSeekAgent) Name() string                  { return "deepseek" }
 func (d *DeepSeekAgent) ConfigDir() string             { return ".deepseek" }
 func (d *DeepSeekAgent) DefaultAPIKeyEnv() string      { return "DEEPSEEK_API_KEY" }
 func (d *DeepSeekAgent) RequiresSpecialHandling() bool { return false }
+func (d *DeepSeekAgent) GetSetupCommands(hostHomeDir string, containerUser string) []string {
+	return nil
+}
 
 func (d *DeepSeekAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
 	containerHomeDir := "/root"
@@ -248,6 +280,9 @@ func (o *OpenCodeAgent) Name() string                  { return "opencode" }
 func (o *OpenCodeAgent) ConfigDir() string             { return ".config/opencode" }
 func (o *OpenCodeAgent) DefaultAPIKeyEnv() string      { return "OPENCODE_API_KEY" }
 func (o *OpenCodeAgent) RequiresSpecialHandling() bool { return false } // Standard config mount
+func (o *OpenCodeAgent) GetSetupCommands(hostHomeDir string, containerUser string) []string {
+	return nil
+}
 
 func (o *OpenCodeAgent) GetMounts(hostHomeDir string, containerUser string) []Mount {
 	containerHomeDir := "/root"

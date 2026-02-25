@@ -165,3 +165,20 @@ func (mb *MountBuilder) BuildAgentMounts() []string {
 
 	return args
 }
+
+// BuildAgentSetupCommands returns shell commands to run inside the container after start.
+// These are used for setup that can't be expressed as bind mounts (e.g. symlinks).
+func (mb *MountBuilder) BuildAgentSetupCommands() []string {
+	var cmds []string
+
+	for _, agent := range agents.GetSupportedAgents() {
+		agentPath := filepath.Join(mb.hostHomeDir, agent.ConfigDir())
+		if !fileExists(agentPath) {
+			continue
+		}
+
+		cmds = append(cmds, agent.GetSetupCommands(mb.hostHomeDir, mb.containerUser)...)
+	}
+
+	return cmds
+}

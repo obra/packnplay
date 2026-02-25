@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -45,47 +46,17 @@ func TestClaudeAgent(t *testing.T) {
 	}
 }
 
-func TestClaudeAgentDualMount(t *testing.T) {
+func TestClaudeAgentMount(t *testing.T) {
 	agent := &ClaudeAgent{}
 
-	// macOS-style: host home differs from container home → dual mount
-	t.Run("different paths produces dual mount", func(t *testing.T) {
+	// Always a single mount — symlink handles absolute path resolution instead
+	t.Run("macOS-style different paths produces single mount", func(t *testing.T) {
 		mounts := agent.GetMounts("/Users/testuser", "vscode")
-		if len(mounts) != 2 {
-			t.Fatalf("GetMounts() returned %d mounts, want 2", len(mounts))
-		}
-
-		// First mount: same-path for absolute plugin path resolution
-		if mounts[0].HostPath != "/Users/testuser/.claude" {
-			t.Errorf("Mount[0] HostPath = %v, want /Users/testuser/.claude", mounts[0].HostPath)
-		}
-		if mounts[0].ContainerPath != "/Users/testuser/.claude" {
-			t.Errorf("Mount[0] ContainerPath = %v, want /Users/testuser/.claude", mounts[0].ContainerPath)
-		}
-
-		// Second mount: container $HOME for Claude Code discovery
-		if mounts[1].HostPath != "/Users/testuser/.claude" {
-			t.Errorf("Mount[1] HostPath = %v, want /Users/testuser/.claude", mounts[1].HostPath)
-		}
-		if mounts[1].ContainerPath != "/home/vscode/.claude" {
-			t.Errorf("Mount[1] ContainerPath = %v, want /home/vscode/.claude", mounts[1].ContainerPath)
-		}
-
-		// Both should be read-write
-		if mounts[0].ReadOnly || mounts[1].ReadOnly {
-			t.Error("Mounts should be read-write")
-		}
-	})
-
-	// Linux same-user: identical paths → single mount optimization
-	t.Run("identical paths produces single mount", func(t *testing.T) {
-		mounts := agent.GetMounts("/home/vscode", "vscode")
 		if len(mounts) != 1 {
-			t.Fatalf("GetMounts() returned %d mounts, want 1 for identical paths", len(mounts))
+			t.Fatalf("GetMounts() returned %d mounts, want 1", len(mounts))
 		}
-
-		if mounts[0].HostPath != "/home/vscode/.claude" {
-			t.Errorf("Mount HostPath = %v, want /home/vscode/.claude", mounts[0].HostPath)
+		if mounts[0].HostPath != "/Users/testuser/.claude" {
+			t.Errorf("Mount HostPath = %v, want /Users/testuser/.claude", mounts[0].HostPath)
 		}
 		if mounts[0].ContainerPath != "/home/vscode/.claude" {
 			t.Errorf("Mount ContainerPath = %v, want /home/vscode/.claude", mounts[0].ContainerPath)
@@ -95,48 +66,98 @@ func TestClaudeAgentDualMount(t *testing.T) {
 		}
 	})
 
-	// Root-as-root: identical paths → single mount optimization
-	t.Run("root as root produces single mount", func(t *testing.T) {
-		mounts := agent.GetMounts("/root", "root")
+	t.Run("Linux same-user produces single mount", func(t *testing.T) {
+		mounts := agent.GetMounts("/home/vscode", "vscode")
 		if len(mounts) != 1 {
-			t.Fatalf("GetMounts() returned %d mounts, want 1 for root-as-root", len(mounts))
+			t.Fatalf("GetMounts() returned %d mounts, want 1", len(mounts))
 		}
+		if mounts[0].ContainerPath != "/home/vscode/.claude" {
+			t.Errorf("Mount ContainerPath = %v, want /home/vscode/.claude", mounts[0].ContainerPath)
+		}
+	})
 
-		if mounts[0].HostPath != "/root/.claude" {
-			t.Errorf("Mount HostPath = %v, want /root/.claude", mounts[0].HostPath)
+	t.Run("root user produces single mount at /root/.claude", func(t *testing.T) {
+		mounts := agent.GetMounts("/Users/testuser", "root")
+		if len(mounts) != 1 {
+			t.Fatalf("GetMounts() returned %d mounts, want 1", len(mounts))
 		}
 		if mounts[0].ContainerPath != "/root/.claude" {
 			t.Errorf("Mount ContainerPath = %v, want /root/.claude", mounts[0].ContainerPath)
 		}
 	})
 
-	// Root user with different host path → dual mount
-	t.Run("root user produces dual mount", func(t *testing.T) {
-		mounts := agent.GetMounts("/Users/testuser", "root")
-		if len(mounts) != 2 {
-			t.Fatalf("GetMounts() returned %d mounts, want 2", len(mounts))
+	t.Run("root-as-root produces single mount", func(t *testing.T) {
+		mounts := agent.GetMounts("/root", "root")
+		if len(mounts) != 1 {
+			t.Fatalf("GetMounts() returned %d mounts, want 1", len(mounts))
 		}
+		if mounts[0].ContainerPath != "/root/.claude" {
+			t.Errorf("Mount ContainerPath = %v, want /root/.claude", mounts[0].ContainerPath)
+		}
+	})
+}
 
-		if mounts[0].ContainerPath != "/Users/testuser/.claude" {
-			t.Errorf("Mount[0] ContainerPath = %v, want /Users/testuser/.claude", mounts[0].ContainerPath)
+func TestClaudeAgentSetupCommands(t *testing.T) {
+	agent := &ClaudeAgent{}
+
+	t.Run("macOS-style: different paths produces symlink command", func(t *testing.T) {
+		cmds := agent.GetSetupCommands("/Users/jesse", "vscode")
+		if len(cmds) != 1 {
+			t.Fatalf("GetSetupCommands() returned %d commands, want 1", len(cmds))
 		}
-		if mounts[1].ContainerPath != "/root/.claude" {
-			t.Errorf("Mount[1] ContainerPath = %v, want /root/.claude", mounts[1].ContainerPath)
+		cmd := cmds[0]
+		// Must create parent directory and symlink host home → container home
+		if !strings.Contains(cmd, "mkdir -p /Users") {
+			t.Errorf("command missing 'mkdir -p /Users': %q", cmd)
+		}
+		if !strings.Contains(cmd, "ln -sfn /home/vscode /Users/jesse") {
+			t.Errorf("command missing symlink creation: %q", cmd)
 		}
 	})
 
-	// Linux different user → dual mount
-	t.Run("linux different user produces dual mount", func(t *testing.T) {
-		mounts := agent.GetMounts("/home/alice", "vscode")
-		if len(mounts) != 2 {
-			t.Fatalf("GetMounts() returned %d mounts, want 2", len(mounts))
+	t.Run("Linux same-user: identical paths produces no commands", func(t *testing.T) {
+		cmds := agent.GetSetupCommands("/home/vscode", "vscode")
+		if len(cmds) != 0 {
+			t.Errorf("GetSetupCommands() returned %d commands, want 0 for identical paths", len(cmds))
 		}
+	})
 
-		if mounts[0].ContainerPath != "/home/alice/.claude" {
-			t.Errorf("Mount[0] ContainerPath = %v, want /home/alice/.claude", mounts[0].ContainerPath)
+	t.Run("root-as-root: no commands needed", func(t *testing.T) {
+		cmds := agent.GetSetupCommands("/root", "root")
+		if len(cmds) != 0 {
+			t.Errorf("GetSetupCommands() returned %d commands, want 0", len(cmds))
 		}
-		if mounts[1].ContainerPath != "/home/vscode/.claude" {
-			t.Errorf("Mount[1] ContainerPath = %v, want /home/vscode/.claude", mounts[1].ContainerPath)
+	})
+
+	t.Run("macOS-style root container user: symlinks to /root", func(t *testing.T) {
+		cmds := agent.GetSetupCommands("/Users/jesse", "root")
+		if len(cmds) != 1 {
+			t.Fatalf("GetSetupCommands() returned %d commands, want 1", len(cmds))
+		}
+		if !strings.Contains(cmds[0], "ln -sfn /root /Users/jesse") {
+			t.Errorf("command missing symlink to /root: %q", cmds[0])
+		}
+	})
+
+	t.Run("Linux different users: symlink needed", func(t *testing.T) {
+		cmds := agent.GetSetupCommands("/home/alice", "vscode")
+		if len(cmds) != 1 {
+			t.Fatalf("GetSetupCommands() returned %d commands, want 1", len(cmds))
+		}
+		if !strings.Contains(cmds[0], "ln -sfn /home/vscode /home/alice") {
+			t.Errorf("command missing symlink: %q", cmds[0])
+		}
+	})
+
+	t.Run("other agents return no setup commands", func(t *testing.T) {
+		for _, agent := range GetSupportedAgents() {
+			if agent.Name() == "claude" {
+				continue
+			}
+			cmds := agent.GetSetupCommands("/Users/jesse", "vscode")
+			if len(cmds) != 0 {
+				t.Errorf("agent %q: GetSetupCommands() returned %d commands, want 0", agent.Name(), len(cmds))
+			}
 		}
 	})
 }

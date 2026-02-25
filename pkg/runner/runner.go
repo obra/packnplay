@@ -1270,6 +1270,18 @@ func Run(config *RunConfig) error {
 		}
 	}
 
+	// Step 10.1: Run agent setup commands (e.g. home-dir symlink for Claude plugin paths)
+	setupMountBuilder := NewMountBuilder(homeDir, devConfig.RemoteUser)
+	for _, cmd := range setupMountBuilder.BuildAgentSetupCommands() {
+		if config.Verbose {
+			fmt.Fprintf(os.Stderr, "Running agent setup: %s\n", cmd)
+		}
+		if _, err := dockerClient.Run("exec", containerID, "sh", "-c", cmd); err != nil {
+			// Non-fatal: warn but continue. Plugins may not work, but the container will.
+			fmt.Fprintf(os.Stderr, "Warning: agent setup command failed: %v\n", err)
+		}
+	}
+
 	// Step 11: Copy config files into container
 
 	// Copy ~/.claude.json
