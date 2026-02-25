@@ -835,6 +835,8 @@ func Run(config *RunConfig) error {
 		if fileExists(sshPath) {
 			args = append(args, "-v", fmt.Sprintf("%s:/home/%s/.ssh:ro", sshPath, devConfig.RemoteUser))
 		}
+	} else {
+		warnSSHInsteadOfRules()
 	}
 
 	// Note: On macOS, gh credentials from Keychain are copied in after container starts

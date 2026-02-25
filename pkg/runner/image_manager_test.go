@@ -167,10 +167,11 @@ func (m *mockDockerClient) RunWithProgress(imageName string, args ...string) err
 	if len(args) > 0 {
 		m.calls = append(m.calls, args[0])
 
-		if args[0] == "pull" {
+		switch args[0] {
+		case "pull":
 			m.pullCalled = true
 			return m.pullError
-		} else if args[0] == "build" {
+		case "build":
 			m.buildCalled = true
 			return m.buildError
 		}
