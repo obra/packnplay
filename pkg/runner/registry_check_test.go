@@ -21,7 +21,7 @@ func TestGetRemoteImageInfo(t *testing.T) {
 
 	info, err := getRemoteImageInfo(dockerClient, imageName)
 	if err != nil {
-		t.Errorf("getRemoteImageInfo() error = %v", err)
+		t.Fatalf("getRemoteImageInfo() error = %v", err)
 	}
 
 	if info.Digest == "" {

@@ -69,24 +69,24 @@ type FeatureMetadata struct {
 func (f *FeatureMetadata) UnmarshalJSON(data []byte) error {
 	// Create a temporary struct with Entrypoint removed to avoid infinite recursion
 	type Alias struct {
-		ID                   string                `json:"id"`
-		Version              string                `json:"version"`
-		Name                 string                `json:"name"`
-		Description          string                `json:"description,omitempty"`
-		Options              map[string]OptionSpec `json:"options,omitempty"`
-		ContainerEnv         map[string]string     `json:"containerEnv,omitempty"`
-		Privileged           *bool                 `json:"privileged,omitempty"`
-		Init                 *bool                 `json:"init,omitempty"`
-		CapAdd               []string              `json:"capAdd,omitempty"`
-		SecurityOpt          []string              `json:"securityOpt,omitempty"`
-		Mounts               []Mount               `json:"mounts,omitempty"`
-		OnCreateCommand      *LifecycleCommand     `json:"onCreateCommand,omitempty"`
-		UpdateContentCommand *LifecycleCommand     `json:"updateContentCommand,omitempty"`
-		PostCreateCommand    *LifecycleCommand     `json:"postCreateCommand,omitempty"`
-		PostStartCommand     *LifecycleCommand     `json:"postStartCommand,omitempty"`
-		PostAttachCommand    *LifecycleCommand     `json:"postAttachCommand,omitempty"`
+		ID                   string                 `json:"id"`
+		Version              string                 `json:"version"`
+		Name                 string                 `json:"name"`
+		Description          string                 `json:"description,omitempty"`
+		Options              map[string]OptionSpec  `json:"options,omitempty"`
+		ContainerEnv         map[string]string      `json:"containerEnv,omitempty"`
+		Privileged           *bool                  `json:"privileged,omitempty"`
+		Init                 *bool                  `json:"init,omitempty"`
+		CapAdd               []string               `json:"capAdd,omitempty"`
+		SecurityOpt          []string               `json:"securityOpt,omitempty"`
+		Mounts               []Mount                `json:"mounts,omitempty"`
+		OnCreateCommand      *LifecycleCommand      `json:"onCreateCommand,omitempty"`
+		UpdateContentCommand *LifecycleCommand      `json:"updateContentCommand,omitempty"`
+		PostCreateCommand    *LifecycleCommand      `json:"postCreateCommand,omitempty"`
+		PostStartCommand     *LifecycleCommand      `json:"postStartCommand,omitempty"`
+		PostAttachCommand    *LifecycleCommand      `json:"postAttachCommand,omitempty"`
 		DependsOn            map[string]interface{} `json:"dependsOn,omitempty"`
-		InstallsAfter        []string              `json:"installsAfter,omitempty"`
+		InstallsAfter        []string               `json:"installsAfter,omitempty"`
 	}
 
 	var aux Alias
@@ -174,8 +174,9 @@ func isOCIReference(ref string) bool {
 //
 // Authentication: This function automatically inherits Docker credentials from ~/.docker/config.json.
 // Users can authenticate to private registries using standard Docker login:
-//   docker login ghcr.io
-//   docker login myregistry.com
+//
+//	docker login ghcr.io
+//	docker login myregistry.com
 //
 // ORAS (the tool used to pull OCI artifacts) automatically reads credentials from the same
 // location as Docker, enabling seamless access to private features without additional configuration.

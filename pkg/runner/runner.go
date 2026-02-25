@@ -37,12 +37,12 @@ type RunConfig struct {
 	DefaultImage          string // default container image to use
 	Command               []string
 	Credentials           config.Credentials
-	DefaultEnvVars        []string // API keys to proxy from host
-	PublishPorts          []string // Port mappings to publish to host
-	HostPath              string   // Host directory path for the container
-	LaunchCommand         string   // Original command line used to launch
-	WorkspaceMount        string   // Custom workspace mount (Docker --mount syntax)
-	WorkspaceFolder       string   // Container workspace folder path
+	DefaultEnvVars        []string                        // API keys to proxy from host
+	PublishPorts          []string                        // Port mappings to publish to host
+	HostPath              string                          // Host directory path for the container
+	LaunchCommand         string                          // Original command line used to launch
+	WorkspaceMount        string                          // Custom workspace mount (Docker --mount syntax)
+	WorkspaceFolder       string                          // Container workspace folder path
 	WorkspaceMountContext *devcontainer.SubstituteContext // Context for variable substitution in workspaceMount
 }
 
@@ -85,7 +85,6 @@ func (a *FeaturePropertiesApplier) ApplyFeatureProperties(baseArgs []string, fea
 		}
 
 		metadata := feature.Metadata
-
 
 		// Apply security properties
 		if metadata.Privileged != nil && *metadata.Privileged {
@@ -1220,7 +1219,7 @@ func Run(config *RunConfig) error {
 			// Apply feature properties with variable substitution
 			// Pass entrypoint tracking so features can warn if they override config entrypoint
 			var enhancedEnv map[string]string
-			args, enhancedEnv, entrypointArgs, entrypointSet, entrypointSource = applier.ApplyFeatureProperties(args, resolvedFeatures, currentEnv, ctx, entrypointSet, entrypointSource)
+			args, enhancedEnv, entrypointArgs, _, _ = applier.ApplyFeatureProperties(args, resolvedFeatures, currentEnv, ctx, entrypointSet, entrypointSource)
 
 			// Add feature-contributed environment variables to docker args
 			// These go after devcontainer env but can still be overridden by user --env flags

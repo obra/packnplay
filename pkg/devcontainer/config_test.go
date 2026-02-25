@@ -220,8 +220,8 @@ func TestConfig_AllLifecycleCommands(t *testing.T) {
 
 func TestConfig_UserEnvProbe(t *testing.T) {
 	tests := []struct {
-		name            string
-		json            string
+		name             string
+		json             string
 		wantUserEnvProbe string
 	}{
 		{
@@ -278,10 +278,10 @@ func TestConfig_UserEnvProbe(t *testing.T) {
 
 func TestLoadLockFile(t *testing.T) {
 	tests := []struct {
-		name        string
-		setupFunc   func(tmpDir string) error
+		name         string
+		setupFunc    func(tmpDir string) error
 		wantLockfile *LockFile
-		wantErr     bool
+		wantErr      bool
 	}{
 		{
 			name: "valid lockfile with multiple features",
@@ -439,11 +439,11 @@ func TestConfig_ShouldOverrideCommand(t *testing.T) {
 
 func TestPortAttributes_RequireLocalPortAndElevateIfNeeded(t *testing.T) {
 	tests := []struct {
-		name                    string
-		json                    string
-		wantRequireLocalPort    *bool
-		wantElevateIfNeeded     *bool
-		wantLabel               string
+		name                 string
+		json                 string
+		wantRequireLocalPort *bool
+		wantElevateIfNeeded  *bool
+		wantLabel            string
 	}{
 		{
 			name: "requireLocalPort true, elevateIfNeeded false",
@@ -527,13 +527,13 @@ func TestPortAttributes_RequireLocalPortAndElevateIfNeeded(t *testing.T) {
 
 func TestConfig_SecurityProperties(t *testing.T) {
 	tests := []struct {
-		name           string
-		json           string
-		wantPrivileged *bool
-		wantInit       *bool
-		wantCapAdd     []string
+		name            string
+		json            string
+		wantPrivileged  *bool
+		wantInit        *bool
+		wantCapAdd      []string
 		wantSecurityOpt []string
-		wantEntrypoint interface{} // can be string or []string
+		wantEntrypoint  interface{} // can be string or []string
 	}{
 		{
 			name: "all security properties present",
@@ -545,11 +545,11 @@ func TestConfig_SecurityProperties(t *testing.T) {
 				"securityOpt": ["seccomp=unconfined", "apparmor=unconfined"],
 				"entrypoint": "/bin/sh"
 			}`,
-			wantPrivileged: boolPtr(true),
-			wantInit:       boolPtr(true),
-			wantCapAdd:     []string{"SYS_ADMIN", "NET_ADMIN"},
+			wantPrivileged:  boolPtr(true),
+			wantInit:        boolPtr(true),
+			wantCapAdd:      []string{"SYS_ADMIN", "NET_ADMIN"},
 			wantSecurityOpt: []string{"seccomp=unconfined", "apparmor=unconfined"},
-			wantEntrypoint: "/bin/sh",
+			wantEntrypoint:  "/bin/sh",
 		},
 		{
 			name: "entrypoint as array",
@@ -557,11 +557,11 @@ func TestConfig_SecurityProperties(t *testing.T) {
 				"image": "alpine:latest",
 				"entrypoint": ["/bin/sh", "-c"]
 			}`,
-			wantPrivileged: nil,
-			wantInit:       nil,
-			wantCapAdd:     nil,
+			wantPrivileged:  nil,
+			wantInit:        nil,
+			wantCapAdd:      nil,
 			wantSecurityOpt: nil,
-			wantEntrypoint: []string{"/bin/sh", "-c"},
+			wantEntrypoint:  []string{"/bin/sh", "-c"},
 		},
 		{
 			name: "privileged false",
@@ -569,20 +569,20 @@ func TestConfig_SecurityProperties(t *testing.T) {
 				"image": "alpine:latest",
 				"privileged": false
 			}`,
-			wantPrivileged: boolPtr(false),
-			wantInit:       nil,
-			wantCapAdd:     nil,
+			wantPrivileged:  boolPtr(false),
+			wantInit:        nil,
+			wantCapAdd:      nil,
 			wantSecurityOpt: nil,
-			wantEntrypoint: nil,
+			wantEntrypoint:  nil,
 		},
 		{
-			name:           "no security properties",
-			json:           `{"image": "alpine:latest"}`,
-			wantPrivileged: nil,
-			wantInit:       nil,
-			wantCapAdd:     nil,
+			name:            "no security properties",
+			json:            `{"image": "alpine:latest"}`,
+			wantPrivileged:  nil,
+			wantInit:        nil,
+			wantCapAdd:      nil,
 			wantSecurityOpt: nil,
-			wantEntrypoint: nil,
+			wantEntrypoint:  nil,
 		},
 	}
 
@@ -619,11 +619,11 @@ func boolPtr(b bool) *bool {
 
 func TestConfig_WorkspaceMount(t *testing.T) {
 	tests := []struct {
-		name               string
-		json               string
-		wantWorkspaceMount string
+		name                string
+		json                string
+		wantWorkspaceMount  string
 		wantWorkspaceFolder string
-		wantError          bool
+		wantError           bool
 	}{
 		{
 			name: "workspaceMount with workspaceFolder",
@@ -632,9 +632,9 @@ func TestConfig_WorkspaceMount(t *testing.T) {
 				"workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
 				"workspaceFolder": "/workspace"
 			}`,
-			wantWorkspaceMount: "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+			wantWorkspaceMount:  "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
 			wantWorkspaceFolder: "/workspace",
-			wantError:          false,
+			wantError:           false,
 		},
 		{
 			name: "workspaceMount without workspaceFolder",
@@ -642,18 +642,18 @@ func TestConfig_WorkspaceMount(t *testing.T) {
 				"image": "alpine:latest",
 				"workspaceMount": "source=${localWorkspaceFolder},target=/app,type=bind"
 			}`,
-			wantWorkspaceMount: "source=${localWorkspaceFolder},target=/app,type=bind",
+			wantWorkspaceMount:  "source=${localWorkspaceFolder},target=/app,type=bind",
 			wantWorkspaceFolder: "",
-			wantError:          false,
+			wantError:           false,
 		},
 		{
 			name: "no workspaceMount",
 			json: `{
 				"image": "alpine:latest"
 			}`,
-			wantWorkspaceMount: "",
+			wantWorkspaceMount:  "",
 			wantWorkspaceFolder: "",
-			wantError:          false,
+			wantError:           false,
 		},
 	}
 

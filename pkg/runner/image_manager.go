@@ -102,11 +102,6 @@ func (im *ImageManager) pullImage(image string) error {
 // inspected with `docker history`. Users should not put secrets in build args.
 // For secrets, use containerEnv with ${localEnv:SECRET} variable substitution
 // which injects secrets at runtime without persisting them in the image.
-// Deprecated: Use buildImageWithLockfile for consistent feature versioning.
-func (im *ImageManager) buildImage(devConfig *devcontainer.Config, projectPath string) error {
-	return im.buildImageWithLockfile(devConfig, projectPath, nil)
-}
-
 // buildImageWithLockfile builds a container image from Dockerfile with lockfile support
 //
 // SECURITY WARNING: Build args are persisted in image metadata and can be
@@ -177,12 +172,6 @@ func (im *ImageManager) buildImageWithLockfile(devConfig *devcontainer.Config, p
 		return fmt.Errorf("failed to build image from %s: %w", dockerfile, err)
 	}
 	return nil
-}
-
-// buildWithFeatures builds a container image with devcontainer features
-// Deprecated: Use buildWithFeaturesAndLockfile for consistent feature versioning.
-func (im *ImageManager) buildWithFeatures(devConfig *devcontainer.Config, projectPath string, imageName string) error {
-	return im.buildWithFeaturesAndLockfile(devConfig, projectPath, imageName, nil)
 }
 
 // buildWithFeaturesAndLockfile builds a container image with devcontainer features using provided lockfile

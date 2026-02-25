@@ -12,12 +12,12 @@ import (
 
 // Runner handles Docker Compose orchestration
 type Runner struct {
-	workDir       string
-	composeFiles  []string
-	service       string
-	runServices   []string
-	dockerClient  *docker.Client
-	verbose       bool
+	workDir      string
+	composeFiles []string
+	service      string
+	runServices  []string
+	dockerClient *docker.Client
+	verbose      bool
 }
 
 // NewRunner creates a new Docker Compose runner

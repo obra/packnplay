@@ -43,7 +43,6 @@ func isDockerAvailable() bool {
 	return cmd.Run() == nil
 }
 
-
 // createTestProject creates a temporary test project with the given files
 // Returns the absolute path to the project directory
 func createTestProject(t *testing.T, files map[string]string) string {
@@ -3302,7 +3301,7 @@ echo "HTTPS feature installed" > /tmp/https-feature-marker
 	serverCmd := exec.CommandContext(ctx, "python3", "-m", "http.server", "8089", "--directory", serverDir)
 	err = serverCmd.Start()
 	require.NoError(t, err)
-	defer serverCmd.Process.Kill()
+	defer func() { _ = serverCmd.Process.Kill() }()
 
 	// Wait for server to be ready
 	time.Sleep(2 * time.Second)
