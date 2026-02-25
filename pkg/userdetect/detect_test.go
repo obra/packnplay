@@ -7,7 +7,22 @@ import (
 	"testing"
 )
 
+// skipIfNoDocker skips the test if running in short mode or Docker is unavailable
+func skipIfNoDocker(t *testing.T) {
+	t.Helper()
+
+	if testing.Short() {
+		t.Skip("Skipping Docker-dependent test in short mode")
+	}
+
+	if !isDockerAvailable() {
+		t.Skip("Skipping test: Docker not available")
+	}
+}
+
 func TestDetectContainerUser(t *testing.T) {
+	skipIfNoDocker(t)
+
 	tests := []struct {
 		name         string
 		image        string
@@ -49,11 +64,6 @@ func TestDetectContainerUser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Skip tests that require Docker if not available
-			if !isDockerAvailable() {
-				t.Skip("Docker not available")
-			}
-
 			result, err := DetectContainerUser(tt.image, tt.devcontainer)
 
 			if tt.shouldError {
@@ -84,6 +94,8 @@ func TestDetectContainerUser(t *testing.T) {
 }
 
 func TestDetectUsersInImage(t *testing.T) {
+	skipIfNoDocker(t)
+
 	tests := []struct {
 		name          string
 		image         string
@@ -103,10 +115,6 @@ func TestDetectUsersInImage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if !isDockerAvailable() {
-				t.Skip("Docker not available")
-			}
-
 			users, err := DetectUsersInImage(tt.image)
 			if err != nil {
 				t.Fatalf("DetectUsersInImage() error = %v", err)
@@ -130,6 +138,8 @@ func TestDetectUsersInImage(t *testing.T) {
 }
 
 func TestGetImageDefaultUser(t *testing.T) {
+	skipIfNoDocker(t)
+
 	tests := []struct {
 		name         string
 		image        string
@@ -149,10 +159,6 @@ func TestGetImageDefaultUser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if !isDockerAvailable() {
-				t.Skip("Docker not available")
-			}
-
 			user, err := GetImageDefaultUser(tt.image)
 			if err != nil {
 				t.Fatalf("GetImageDefaultUser() error = %v", err)
@@ -166,9 +172,7 @@ func TestGetImageDefaultUser(t *testing.T) {
 }
 
 func TestDirectDetection(t *testing.T) {
-	if !isDockerAvailable() {
-		t.Skip("Docker not available")
-	}
+	skipIfNoDocker(t)
 
 	// Test direct detection with a simple image
 	result, err := detectRuntimeUserDirect("ubuntu:22.04")
@@ -192,9 +196,7 @@ func TestDirectDetection(t *testing.T) {
 }
 
 func TestCaching(t *testing.T) {
-	if !isDockerAvailable() {
-		t.Skip("Docker not available")
-	}
+	skipIfNoDocker(t)
 
 	image := "ubuntu:22.04"
 
@@ -238,9 +240,7 @@ func TestCaching(t *testing.T) {
 }
 
 func TestGetImageID(t *testing.T) {
-	if !isDockerAvailable() {
-		t.Skip("Docker not available")
-	}
+	skipIfNoDocker(t)
 
 	imageID, err := getImageID("ubuntu:22.04")
 	if err != nil {
