@@ -66,11 +66,15 @@ RUN npm install -g \
         @qwen-code/qwen-code \
         @google/gemini-cli \
         @github/copilot \
-        @openai/codex \
-        @anthropic-ai/claude-code
+        @openai/codex
 
-# Layer 8: Final environment setup
-ENV PATH="/usr/local/go/bin:/home/vscode/.cargo/bin:${PATH}"
+# Layer 8: Install Claude Code via native installer
+USER vscode
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# Layer 9: Final environment setup
+USER root
+ENV PATH="/home/vscode/.local/bin:/usr/local/go/bin:/home/vscode/.cargo/bin:${PATH}"
 ENV DISABLE_AUTOUPDATER=true
 
 # Set the default user (matches devcontainer convention)

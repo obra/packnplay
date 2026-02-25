@@ -127,5 +127,5 @@ func init() {
 
 	stopCmd.Flags().StringVar(&stopPath, "path", "", "Project path (default: pwd)")
 	stopCmd.Flags().StringVar(&stopWorktree, "worktree", "", "Worktree name")
-	stopCmd.Flags().BoolVar(&stopAll, "all", false, "Stop all packnplay-managed containers")
+	stopCmd.Flags().BoolVarP(&stopAll, "all", "a", false, "Stop all packnplay-managed containers")
 }
