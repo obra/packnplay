@@ -3753,14 +3753,10 @@ func TestE2E_HostRequirements_Warning(t *testing.T) {
 }
 
 // TestE2E_UpdateRemoteUserUID verifies that updateRemoteUserUID syncs container
-// user UID/GID to match host user on Linux (skipped on macOS/Windows)
+// user UID/GID to match host user
 func TestE2E_UpdateRemoteUserUID(t *testing.T) {
 	skipIfNoDocker(t)
 
-	// Skip on non-Linux platforms (Docker Desktop handles this automatically)
-	if runtime.GOOS != "linux" {
-		t.Skip("updateRemoteUserUID is Linux-only (Docker Desktop handles UID/GID mapping automatically)")
-	}
 	if isCI() {
 		t.Skip("updateRemoteUserUID feature does not remap UID when user already exists with different UID - feature bug")
 	}
@@ -3808,23 +3804,38 @@ func TestE2E_UpdateRemoteUserUID(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("%d", hostGID), containerGID, "Container user GID should match host GID")
 }
 
-// TestE2E_UpdateRemoteUserUID_NotOnMacOS verifies that updateRemoteUserUID
-// is skipped on macOS (where Docker Desktop handles UID/GID mapping)
-func TestE2E_UpdateRemoteUserUID_NotOnMacOS(t *testing.T) {
+// TestE2E_GitSafeDirectory verifies that git operations work inside containers
+// even when the workspace is owned by a different UID than the container user.
+// Without safe.directory configuration, git refuses to operate with
+// "fatal: detected dubious ownership in repository" errors.
+func TestE2E_GitSafeDirectory(t *testing.T) {
 	skipIfNoDocker(t)
 
-	// Only run on macOS
-	if runtime.GOOS != "darwin" {
-		t.Skip("This test verifies macOS-specific behavior")
-	}
-
-	projectDir := createTestProject(t, map[string]string{
-		".devcontainer/devcontainer.json": `{
-  "image": "alpine:latest",
-  "updateRemoteUserUID": true
-}`,
-	})
+	// Create temp dir under user's home so it's accessible inside VM-based Docker
+	// runtimes (Colima, etc.) which may only share /Users, not /var/folders
+	homeDir, err := os.UserHomeDir()
+	require.NoError(t, err)
+	projectDir, err := os.MkdirTemp(homeDir, "packnplay-e2e-safedir-*")
+	require.NoError(t, err)
 	defer os.RemoveAll(projectDir)
+
+	// Write devcontainer.json
+	dcDir := filepath.Join(projectDir, ".devcontainer")
+	require.NoError(t, os.MkdirAll(dcDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dcDir, "devcontainer.json"), []byte(`{
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "remoteUser": "vscode"
+}`), 0644))
+
+	// Initialize a git repo in the project directory so it's mounted into the container
+	cmd := exec.Command("git", "init")
+	cmd.Dir = projectDir
+	require.NoError(t, cmd.Run(), "Failed to init git repo in test project")
+	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "init")
+	cmd.Dir = projectDir
+	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@test.com",
+		"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@test.com")
+	require.NoError(t, cmd.Run(), "Failed to create initial commit")
 
 	containerName := getContainerNameForProject(projectDir)
 	defer cleanupContainer(t, containerName)
@@ -3835,11 +3846,62 @@ func TestE2E_UpdateRemoteUserUID_NotOnMacOS(t *testing.T) {
 		}
 	}()
 
-	// Run should succeed and skip UID/GID sync
-	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "echo", "works")
-	require.NoError(t, err, "Container should start successfully")
-	require.Contains(t, output, "works", "Container should run normally")
-	// We don't check for a skip message - just verify it doesn't error
+	// git log should succeed without "dubious ownership" error
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "git", "log", "--oneline", "-1")
+	require.NoError(t, err, "git should work inside container without safe.directory errors: %s", output)
+	require.Contains(t, output, "init", "Should see the initial commit")
+}
+
+// TestE2E_GHCredsMount verifies that --gh-creds mounts ~/.config/gh on all platforms.
+// Previously this was gated by isLinux which silently skipped the mount on macOS.
+func TestE2E_GHCredsMount(t *testing.T) {
+	skipIfNoDocker(t)
+
+	// Create ~/.config/gh with a marker file if it doesn't exist
+	homeDir, err := os.UserHomeDir()
+	require.NoError(t, err)
+	ghConfigDir := filepath.Join(homeDir, ".config", "gh")
+	createdGHDir := false
+	if !fileExists(ghConfigDir) {
+		require.NoError(t, os.MkdirAll(ghConfigDir, 0755))
+		createdGHDir = true
+	}
+	markerFile := filepath.Join(ghConfigDir, "packnplay-test-marker")
+	require.NoError(t, os.WriteFile(markerFile, []byte("gh-creds-test\n"), 0644))
+	defer os.Remove(markerFile)
+	defer func() {
+		if createdGHDir {
+			os.RemoveAll(ghConfigDir)
+		}
+	}()
+
+	// Create temp dir under user's home so it's accessible inside VM-based Docker
+	// runtimes (Colima, etc.) which may only share /Users, not /var/folders
+	projectDir, err := os.MkdirTemp(homeDir, "packnplay-e2e-ghcreds-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(projectDir)
+
+	// Write devcontainer.json
+	dcDir := filepath.Join(projectDir, ".devcontainer")
+	require.NoError(t, os.MkdirAll(dcDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dcDir, "devcontainer.json"), []byte(`{
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "remoteUser": "vscode"
+}`), 0644))
+
+	containerName := getContainerNameForProject(projectDir)
+	defer cleanupContainer(t, containerName)
+	defer func() {
+		containerID := getContainerIDByName(t, containerName)
+		if containerID != "" {
+			cleanupMetadata(t, containerID)
+		}
+	}()
+
+	output, err := runPacknplayInDir(t, projectDir, "run", "--no-worktree", "--gh-creds",
+		"cat", "/home/vscode/.config/gh/packnplay-test-marker")
+	require.NoError(t, err, "gh config should be mounted in container: %s", output)
+	require.Contains(t, output, "gh-creds-test", "Should see the marker file from ~/.config/gh")
 }
 
 // TestE2E_OverrideCommand_False verifies that overrideCommand: false runs container CMD

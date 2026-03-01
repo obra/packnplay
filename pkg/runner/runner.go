@@ -855,9 +855,8 @@ func Run(config *RunConfig) error {
 		warnSSHInsteadOfRules()
 	}
 
-	// Note: On macOS, gh credentials from Keychain are copied in after container starts
-	// On Linux, mount the gh config directory if it exists
-	if config.Credentials.GH && isLinux {
+	// Mount GitHub CLI config directory if it exists
+	if config.Credentials.GH {
 		ghConfigPath := filepath.Join(homeDir, ".config", "gh")
 		if fileExists(ghConfigPath) {
 			args = append(args, "-v", fmt.Sprintf("%s:/home/%s/.config/gh", ghConfigPath, devConfig.RemoteUser))
@@ -1000,6 +999,14 @@ func Run(config *RunConfig) error {
 
 	// Add IS_SANDBOX marker so tools know they're in a sandbox
 	args = append(args, "-e", "IS_SANDBOX=1")
+
+	// Configure git safe.directory to prevent "dubious ownership" errors
+	// when container user UID differs from mounted workspace file ownership
+	// (common with Colima, Podman, and other non-Docker-Desktop runtimes).
+	// Uses GIT_CONFIG_COUNT mechanism, additive to the mounted read-only .gitconfig.
+	args = append(args, "-e", "GIT_CONFIG_COUNT=1")
+	args = append(args, "-e", "GIT_CONFIG_KEY_0=safe.directory")
+	args = append(args, "-e", "GIT_CONFIG_VALUE_0=*")
 
 	// Don't set PATH - use container's default PATH to avoid host pollution
 
@@ -1805,18 +1812,11 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-// updateRemoteUserUID synchronizes the container user's UID/GID to match the host user
-// This is only effective on Linux where UID/GID mismatches cause permission issues
-// On macOS/Windows, Docker Desktop handles UID/GID mapping automatically
+// updateRemoteUserUID synchronizes the container user's UID/GID to match the host user.
+// This prevents permission mismatches on mounted volumes, particularly with runtimes
+// like Colima and Podman that don't provide transparent UID mapping.
+// If the container user already has the correct UID, this is a no-op.
 func updateRemoteUserUID(dockerClient *docker.Client, containerID, username string, verbose bool) error {
-	// Only run on Linux - Docker Desktop on macOS/Windows handles UID/GID mapping
-	if runtime.GOOS != "linux" {
-		if verbose {
-			fmt.Fprintf(os.Stderr, "Skipping UID/GID sync on %s (Docker Desktop handles this automatically)\n", runtime.GOOS)
-		}
-		return nil
-	}
-
 	// Get host UID/GID
 	hostUID := os.Getuid()
 	hostGID := os.Getgid()
