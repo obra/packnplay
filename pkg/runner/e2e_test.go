@@ -53,8 +53,14 @@ func isDockerAvailable() bool {
 func createTestProject(t *testing.T, files map[string]string) string {
 	t.Helper()
 
-	// Create temp directory
-	projectDir, err := os.MkdirTemp("", "packnplay-e2e-*")
+	// Create temp directory under $HOME so it's accessible to all container
+	// runtimes. Colima and Podman only share /Users by default, so /var/folders
+	// (which resolves to /private/var/folders on macOS) is not mountable.
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("Failed to get home directory: %v", err)
+	}
+	projectDir, err := os.MkdirTemp(homeDir, "packnplay-e2e-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
@@ -1904,8 +1910,10 @@ RUN echo "build options test" > /options-test.txt`,
 func TestE2E_CustomMounts(t *testing.T) {
 	skipIfNoDocker(t)
 
-	// Create test directory with content
-	testDataDir, err := os.MkdirTemp("", "packnplay-mount-test-*")
+	// Create test directory under $HOME so it's mountable by all runtimes
+	homeDir, err := os.UserHomeDir()
+	require.NoError(t, err)
+	testDataDir, err := os.MkdirTemp(homeDir, "packnplay-mount-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(testDataDir)
 
