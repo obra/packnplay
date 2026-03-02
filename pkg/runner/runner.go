@@ -39,6 +39,7 @@ type RunConfig struct {
 	Credentials           config.Credentials
 	DefaultEnvVars        []string                        // API keys to proxy from host
 	PublishPorts          []string                        // Port mappings to publish to host
+	Volumes               []string                        // Volume mounts from CLI -v flags
 	HostPath              string                          // Host directory path for the container
 	LaunchCommand         string                          // Original command line used to launch
 	WorkspaceMount        string                          // Custom workspace mount (Docker --mount syntax)
@@ -564,6 +565,9 @@ func Run(config *RunConfig) error {
 		}
 
 		// User explicitly wants to reconnect
+		if warning := ignoredCreationFlags(config); warning != "" {
+			fmt.Fprintln(os.Stderr, warning)
+		}
 		if config.Verbose {
 			fmt.Fprintf(os.Stderr, "Reconnecting to existing container %s\n", containerName)
 		}
@@ -614,6 +618,9 @@ func Run(config *RunConfig) error {
 
 		if err == nil && runningCheck == "" {
 			// Container exists but is not running - try to restart it
+			if warning := ignoredCreationFlags(config); warning != "" {
+				fmt.Fprintln(os.Stderr, warning)
+			}
 			if config.Verbose {
 				fmt.Fprintf(os.Stderr, "Found stopped container %s, attempting to restart...\n", containerName)
 			}
@@ -1101,6 +1108,11 @@ func Run(config *RunConfig) error {
 
 		// Add as Docker mount flag
 		args = append(args, "--mount", substitutedMount)
+	}
+
+	// Add CLI volume mounts (-v flags)
+	for _, vol := range config.Volumes {
+		args = append(args, "-v", normalizeVolume(vol))
 	}
 
 	// Add user for container operations (docker run --user)
@@ -2421,6 +2433,42 @@ func executeHostCommandsParallel(commands map[string]interface{}, workDir string
 		errMsg += fmt.Sprintf("\n  - %s", err.Error())
 	}
 	return fmt.Errorf("%s", errMsg)
+}
+
+// ignoredCreationFlags returns a warning message listing CLI flags that only
+// apply at container creation time. Returns empty string if none are set.
+func ignoredCreationFlags(config *RunConfig) string {
+	var flags []string
+	if len(config.Volumes) > 0 {
+		flags = append(flags, "-v/--volume")
+	}
+	if len(config.PublishPorts) > 0 {
+		flags = append(flags, "-p/--publish")
+	}
+	if len(flags) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("Warning: %s flags are ignored when reusing an existing container (they only apply at creation time).\nTo apply new flags, stop the container first with: packnplay stop", strings.Join(flags, ", "))
+}
+
+// normalizeVolume expands shorthand volume specs to full Docker -v syntax.
+// A bare path (no colon) becomes a same-path bind mount (PATH:PATH).
+// Relative bare paths are resolved to absolute paths.
+// A leading colon (:PATH) creates an anonymous volume at PATH.
+func normalizeVolume(vol string) string {
+	if strings.HasPrefix(vol, ":") {
+		return vol[1:]
+	}
+	if !strings.Contains(vol, ":") {
+		resolved := vol
+		if !filepath.IsAbs(vol) {
+			if abs, err := filepath.Abs(vol); err == nil {
+				resolved = abs
+			}
+		}
+		return resolved + ":" + resolved
+	}
+	return vol
 }
 
 // validateHostRequirements checks if the host meets minimum requirements
