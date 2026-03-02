@@ -62,7 +62,17 @@ func TestFindSSHAgentSocketDarwin(t *testing.T) {
 	}
 
 	t.Run("defaults to Docker Desktop socket path", func(t *testing.T) {
-		t.Setenv("DOCKER_HOST", "")
+		// Properly unset DOCKER_HOST (not just empty string)
+		orig, wasSet := os.LookupEnv("DOCKER_HOST")
+		os.Unsetenv("DOCKER_HOST")
+		defer func() {
+			if wasSet {
+				os.Setenv("DOCKER_HOST", orig)
+			} else {
+				os.Unsetenv("DOCKER_HOST")
+			}
+		}()
+
 		sock, err := findSSHAgentSocketDarwin()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -79,8 +89,7 @@ func TestFindSSHAgentSocketDarwin(t *testing.T) {
 		sock, err := findSSHAgentSocketDarwin()
 		if err != nil {
 			// Expected if colima isn't running
-			t.Logf("Colima detection returned error (expected in CI): %v", err)
-			return
+			t.Skipf("Colima not available: %v", err)
 		}
 		if sock == "" {
 			t.Error("got empty socket path from Colima")
