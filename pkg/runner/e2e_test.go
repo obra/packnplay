@@ -3826,6 +3826,8 @@ func TestE2E_GitSafeDirectory(t *testing.T) {
 	projectDir, err := os.MkdirTemp(homeDir, "packnplay-e2e-safedir-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(projectDir)
+	// MkdirTemp creates with 0700; widen so non-root container users can read
+	require.NoError(t, os.Chmod(projectDir, 0755))
 
 	// Write devcontainer.json
 	dcDir := filepath.Join(projectDir, ".devcontainer")
