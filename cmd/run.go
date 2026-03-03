@@ -25,14 +25,14 @@ var (
 	runReconnect    bool
 	runPublishPorts []string
 	// Credential flags
-	runGitCreds  *bool
-	runSSHCreds  *bool
-	runSSHAgent  *bool
-	runGHCreds   *bool
-	runGPGCreds  *bool
-	runNPMCreds  *bool
-	runAWSCreds  *bool
-	runAllCreds  bool
+	runGitCreds *bool
+	runSSHCreds *bool
+	runSSHAgent *bool
+	runGHCreds  *bool
+	runGPGCreds *bool
+	runNPMCreds *bool
+	runAWSCreds *bool
+	runAllCreds bool
 )
 
 var runCmd = &cobra.Command{
