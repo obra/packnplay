@@ -27,7 +27,7 @@ I built packnplay as a lightweight container/worktree launcher for my coding age
 - **Credential Management**: Interactive first-run setup for git, GitHub CLI, GPG, npm, and AWS credentials
 - **AWS Credentials Support**: Intelligent handling of AWS credentials including SSO, credential_process (granted.dev, aws-vault), and static credentials
 - **Clean Environment**: Only passes safe environment variables (terminal/locale), no host pollution
-- **macOS Keychain Integration**: Automatically extracts Claude and GitHub CLI credentials from macOS Keychain
+- **macOS Keychain Integration**: Automatically extracts GitHub CLI credentials from macOS Keychain, stores container-specific Claude credentials
 
 ## Installation
 
@@ -369,7 +369,7 @@ On first run, packnplay prompts you to choose which credentials to enable by def
 - **npm**: `~/.npmrc` (for authenticated package operations)
 
 **macOS Keychain Integration:**
-- Claude credentials automatically extracted from Keychain (`Claude Code-credentials`)
+- Claude container credentials stored in Keychain (`packnplay-containers-credentials`) after first `claude login` inside a container
 - GitHub CLI credentials extracted and base64-decoded from Keychain (`gh:github.com`)
 - Credentials copied into container (not mounted) to avoid file locking
 

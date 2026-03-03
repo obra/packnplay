@@ -2213,9 +2213,8 @@ func getOrCreateContainerCredentialFile(containerName string) (string, error) {
 	}
 	credentialFile := filepath.Join(credentialsDir, "claude-credentials.json")
 
-	// If file doesn't exist, initialize it
-	if !fileExists(credentialFile) {
-		// Try to get initial credentials from keychain (macOS) or copy from host (Linux)
+	// Seed credentials if file is missing or empty (e.g. leftover from a failed prior attempt)
+	if getFileSize(credentialFile) < 20 {
 		initialCreds, err := getInitialContainerCredentials()
 		if err != nil {
 			// Create empty file - user will need to authenticate in container
