@@ -515,7 +515,7 @@ func Run(config *RunConfig) error {
 					cmdStr.WriteString(" ")
 				}
 				if strings.Contains(arg, " ") {
-					cmdStr.WriteString(fmt.Sprintf("'%s'", arg))
+					fmt.Fprintf(&cmdStr, "'%s'", arg)
 				} else {
 					cmdStr.WriteString(arg)
 				}
