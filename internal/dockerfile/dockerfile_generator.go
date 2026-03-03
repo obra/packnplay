@@ -52,7 +52,7 @@ func (g *DockerfileGenerator) generateMultiStage(baseImage string, features []*d
 			// OCI feature - needs to be copied from absolute path
 			// We'll use a build arg to pass the feature path at build time
 			featureDestPath := fmt.Sprintf("/tmp/features/%d-%s", i, feature.ID)
-			sb.WriteString(fmt.Sprintf("# Copy OCI feature: %s\n", feature.ID))
+			fmt.Fprintf(&sb, "# Copy OCI feature: %s\n", feature.ID)
 
 			// For OCI features in cache, we need to use COPY with the relative path from build context
 			// But since they're outside the build context, we use a workaround:
@@ -61,19 +61,19 @@ func (g *DockerfileGenerator) generateMultiStage(baseImage string, features []*d
 			if strings.Contains(feature.InstallPath, "oci-cache") {
 				relPath = filepath.Join("oci-cache", filepath.Base(feature.InstallPath))
 			}
-			sb.WriteString(fmt.Sprintf("COPY %s %s\n", relPath, featureDestPath))
+			fmt.Fprintf(&sb, "COPY %s %s\n", relPath, featureDestPath)
 		}
 	}
 	sb.WriteString("\n")
 
 	// Stage 2: Base image with features
-	sb.WriteString(fmt.Sprintf("FROM %s as base\n", baseImage))
+	fmt.Fprintf(&sb, "FROM %s as base\n", baseImage)
 	sb.WriteString("USER root\n")
 
 	// Add user context environment variables
-	sb.WriteString(fmt.Sprintf("ENV _REMOTE_USER=%s\n", remoteUser))
-	sb.WriteString(fmt.Sprintf("ENV _REMOTE_USER_HOME=/home/%s\n", remoteUser))
-	sb.WriteString(fmt.Sprintf("ENV _CONTAINER_USER=%s\n\n", remoteUser))
+	fmt.Fprintf(&sb, "ENV _REMOTE_USER=%s\n", remoteUser)
+	fmt.Fprintf(&sb, "ENV _REMOTE_USER_HOME=/home/%s\n", remoteUser)
+	fmt.Fprintf(&sb, "ENV _CONTAINER_USER=%s\n\n", remoteUser)
 
 	// Copy features from prep stage
 	sb.WriteString("# Copy features from prep stage\n")
@@ -82,7 +82,7 @@ func (g *DockerfileGenerator) generateMultiStage(baseImage string, features []*d
 	// Install features with options processing
 	processor := devcontainer.NewFeatureOptionsProcessor()
 	for i, feature := range features {
-		sb.WriteString(fmt.Sprintf("# Install feature: %s\n", feature.ID))
+		fmt.Fprintf(&sb, "# Install feature: %s\n", feature.ID)
 
 		// Add environment variables from options
 		if feature.Metadata != nil && feature.Metadata.Options != nil {
@@ -91,24 +91,24 @@ func (g *DockerfileGenerator) generateMultiStage(baseImage string, features []*d
 				return "", fmt.Errorf("invalid options for feature %s: %w", feature.ID, err)
 			}
 			for envName, envValue := range envVars {
-				sb.WriteString(fmt.Sprintf("ENV %s=%s\n", envName, envValue))
+				fmt.Fprintf(&sb, "ENV %s=%s\n", envName, envValue)
 			}
 		}
 
 		// Add feature-contributed container environment variables
 		if feature.Metadata != nil && feature.Metadata.ContainerEnv != nil {
 			for envName, envValue := range feature.Metadata.ContainerEnv {
-				sb.WriteString(fmt.Sprintf("ENV %s=%s\n", envName, envValue))
+				fmt.Fprintf(&sb, "ENV %s=%s\n", envName, envValue)
 			}
 		}
 
 		featureDestPath := fmt.Sprintf("/tmp/devcontainer-features/%d-%s", i, feature.ID)
-		sb.WriteString(fmt.Sprintf("RUN cd %s && chmod +x install.sh && ./install.sh\n\n", featureDestPath))
+		fmt.Fprintf(&sb, "RUN cd %s && chmod +x install.sh && ./install.sh\n\n", featureDestPath)
 	}
 
 	// Switch to user
 	if remoteUser != "" {
-		sb.WriteString(fmt.Sprintf("USER %s\n", remoteUser))
+		fmt.Fprintf(&sb, "USER %s\n", remoteUser)
 	}
 	sb.WriteString("WORKDIR /workspace\n")
 
@@ -120,20 +120,20 @@ func (g *DockerfileGenerator) generateSingleStage(baseImage string, features []*
 	var sb strings.Builder
 
 	// FROM statement
-	sb.WriteString(fmt.Sprintf("FROM %s\n\n", baseImage))
+	fmt.Fprintf(&sb, "FROM %s\n\n", baseImage)
 
 	// Switch to root for installation
 	sb.WriteString("USER root\n")
 
 	// Add user context environment variables
-	sb.WriteString(fmt.Sprintf("ENV _REMOTE_USER=%s\n", remoteUser))
-	sb.WriteString(fmt.Sprintf("ENV _REMOTE_USER_HOME=/home/%s\n", remoteUser))
-	sb.WriteString(fmt.Sprintf("ENV _CONTAINER_USER=%s\n\n", remoteUser))
+	fmt.Fprintf(&sb, "ENV _REMOTE_USER=%s\n", remoteUser)
+	fmt.Fprintf(&sb, "ENV _REMOTE_USER_HOME=/home/%s\n", remoteUser)
+	fmt.Fprintf(&sb, "ENV _CONTAINER_USER=%s\n\n", remoteUser)
 
 	// Install features
 	processor := devcontainer.NewFeatureOptionsProcessor()
 	for i, feature := range features {
-		sb.WriteString(fmt.Sprintf("# Install feature: %s\n", feature.ID))
+		fmt.Fprintf(&sb, "# Install feature: %s\n", feature.ID)
 
 		// Process feature options to environment variables
 		if feature.Metadata != nil && feature.Metadata.Options != nil {
@@ -142,14 +142,14 @@ func (g *DockerfileGenerator) generateSingleStage(baseImage string, features []*
 				return "", fmt.Errorf("invalid options for feature %s: %w", feature.ID, err)
 			}
 			for envName, envValue := range envVars {
-				sb.WriteString(fmt.Sprintf("ENV %s=%s\n", envName, envValue))
+				fmt.Fprintf(&sb, "ENV %s=%s\n", envName, envValue)
 			}
 		}
 
 		// Add feature-contributed container environment variables
 		if feature.Metadata != nil && feature.Metadata.ContainerEnv != nil {
 			for envName, envValue := range feature.Metadata.ContainerEnv {
-				sb.WriteString(fmt.Sprintf("ENV %s=%s\n", envName, envValue))
+				fmt.Fprintf(&sb, "ENV %s=%s\n", envName, envValue)
 			}
 		}
 
@@ -166,15 +166,15 @@ func (g *DockerfileGenerator) generateSingleStage(baseImage string, features []*
 		}
 
 		featureDestPath := fmt.Sprintf("/tmp/devcontainer-features/%d-%s", i, feature.ID)
-		sb.WriteString(fmt.Sprintf("COPY %s %s\n", relPath, featureDestPath))
+		fmt.Fprintf(&sb, "COPY %s %s\n", relPath, featureDestPath)
 
 		// Run the install script from its directory so relative paths work
-		sb.WriteString(fmt.Sprintf("RUN cd %s && chmod +x install.sh && ./install.sh\n\n", featureDestPath))
+		fmt.Fprintf(&sb, "RUN cd %s && chmod +x install.sh && ./install.sh\n\n", featureDestPath)
 	}
 
 	// Switch back to remote user if specified
 	if remoteUser != "" {
-		sb.WriteString(fmt.Sprintf("USER %s\n", remoteUser))
+		fmt.Fprintf(&sb, "USER %s\n", remoteUser)
 	}
 	sb.WriteString("WORKDIR /workspace\n")
 

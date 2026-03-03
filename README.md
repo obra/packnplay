@@ -364,14 +364,12 @@ On first run, packnplay prompts you to choose which credentials to enable by def
 **Credentials are mounted read-only for security:**
 - **Git**: `~/.gitconfig` (git user configuration)
 - **SSH**: `~/.ssh` (SSH keys for authentication to servers and repos)
-- **GitHub CLI**: `~/.config/gh` (copied from Keychain on macOS, mounted on Linux)
+- **GitHub CLI**: `~/.config/gh` (GitHub CLI authentication)
 - **GPG**: `~/.gnupg` (for commit signing)
 - **npm**: `~/.npmrc` (for authenticated package operations)
 
 **macOS Keychain Integration:**
 - Claude credentials automatically extracted from Keychain (`Claude Code-credentials`)
-- GitHub CLI credentials extracted and base64-decoded from Keychain (`gh:github.com`)
-- Credentials copied into container (not mounted) to avoid file locking
 
 ### File Mounts
 
@@ -417,7 +415,7 @@ packnplay mounts your project at the **exact same path** inside the container as
 
 ## Requirements
 
-- **Docker**: Docker Desktop on macOS, or Docker Engine on Linux
+- **Docker**: Docker Desktop, Colima, or Podman on macOS; Docker Engine on Linux
 - **Git**: For worktree functionality
 - **Go 1.23+**: For building from source
 - **Optional**: GitHub CLI (`gh`) for GitHub operations
