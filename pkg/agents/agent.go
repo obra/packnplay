@@ -49,11 +49,33 @@ func (c *ClaudeAgent) GetMounts(hostHomeDir string, containerUser string) []Moun
 		containerHomeDir = "/home/" + containerUser
 	}
 
+	hostClaudePath := filepath.Join(hostHomeDir, ".claude")
+	containerClaudePath := filepath.Join(containerHomeDir, ".claude")
+
+	// If paths are already the same (e.g., Linux with same user), only need one mount
+	if hostClaudePath == containerClaudePath {
+		return []Mount{
+			{
+				HostPath:      hostClaudePath,
+				ContainerPath: containerClaudePath,
+				ReadOnly:      false,
+			},
+		}
+	}
+
+	// Dual mount required: Claude Code finds config at $HOME/.claude, but
+	// installed_plugins.json contains absolute host paths that must resolve.
+	// Mount at both locations so both access patterns work.
 	return []Mount{
 		{
-			HostPath:      filepath.Join(hostHomeDir, ".claude"),
-			ContainerPath: filepath.Join(containerHomeDir, ".claude"),
-			ReadOnly:      false, // Needs write for plugins, etc.
+			HostPath:      hostClaudePath,
+			ContainerPath: hostClaudePath, // Same as host (for plugin absolute paths)
+			ReadOnly:      false,
+		},
+		{
+			HostPath:      hostClaudePath,
+			ContainerPath: containerClaudePath, // At container $HOME (for Claude Code)
+			ReadOnly:      false,
 		},
 	}
 }
