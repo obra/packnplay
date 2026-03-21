@@ -762,17 +762,6 @@ func Run(config *RunConfig) error {
 		}
 	}
 
-	// Mount .claude directory
-	args = append(args, "-v", fmt.Sprintf("%s/.claude:/home/%s/.claude", homeDir, devConfig.RemoteUser))
-
-	// Overlay mount credential file after .claude directory mount
-	if needsCredentialOverlay {
-		args = append(args, "-v", fmt.Sprintf("%s:/home/%s/.claude/.credentials.json", credentialFile, devConfig.RemoteUser))
-	}
-
-	// Ensure parent directory exists in container by creating it on first run
-	// We'll create it after container starts but before exec
-
 	// Mount workspace - use workspaceMount if specified, otherwise default -v
 	if devConfig.WorkspaceMount != "" {
 		// Validate that workspaceFolder is also set (Microsoft spec requirement)
@@ -812,6 +801,12 @@ func Run(config *RunConfig) error {
 	mountBuilder := NewMountBuilder(homeDir, devConfig.RemoteUser)
 	agentMounts := mountBuilder.BuildAgentMounts()
 	args = append(args, agentMounts...)
+
+	// Overlay mount credential file after .claude directory mount
+	// Must come after BuildAgentMounts() which mounts ~/.claude
+	if needsCredentialOverlay {
+		args = append(args, "-v", fmt.Sprintf("%s:/home/%s/.claude/.credentials.json", credentialFile, devConfig.RemoteUser))
+	}
 
 	// If using a worktree, also mount the main repo's .git directory at its real path
 	// This allows the worktree's .git file (which contains gitdir: <path>) to resolve correctly
