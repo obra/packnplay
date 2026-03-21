@@ -27,8 +27,8 @@ RUN GO_VERSION="1.21.5" && \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
     echo 'source ~/.cargo/env' >> /etc/profile
 
-# Layer 5: Install Node.js LTS
-RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
+# Layer 5: Install Node.js 24
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
     apt-get install -y nodejs
 
 # Layer 6: Install cloud CLIs (moderately stable)
